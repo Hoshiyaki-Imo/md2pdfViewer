@@ -21,7 +21,8 @@ class MainWindow(QMainWindow):
         self.MAKEWINDOW()
 
     def loadSetting(self,settings):
-        self.NowSetting = {"Change__ChangeTool" : settings.value("Change/ChangeTool", "weasyprint"),
+        self.NowSetting = {"Main__DisplayStatusBar" : settings.value("Main/DisplayStatusBar", True, type = bool),
+                           "Change__ChangeTool" : settings.value("Change/ChangeTool", "weasyprint"),
                            "Change__ChangeCompletedDialog" : settings.value("Change/ChangeCompletedDialog", True, type = bool),
                            "Display__StatusBar" : settings.value("Display/StatusBar", True, type = bool),
                            "Display__ChangeButton" : settings.value("Display/ChangeButton", True, type = bool)}
@@ -44,7 +45,8 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(centralWidget)
         self.StatusBar = self.statusBar()
         self.setStatusBar(self.StatusBar)
-        self.StatusBar.showMessage(self.tr("正常に起動しました"))
+
+        self.MainDisplaySomethings()
 
 
     def makeMenuBar(self):
@@ -63,8 +65,9 @@ class MainWindow(QMainWindow):
         acSetting = QAction(self.tr("設定"),self)
         acSetting.triggered.connect(self.SettingDialog)
 
-        acDisplayStatusBar = QAction(self.tr("ステータスバー"),self)
-        acDisplayStatusBar.triggered.connect(self.DisplayChangeStatusBar)
+        self.acDisplayStatusBar = QAction(self.tr("ステータスバー"),self)
+        self.acDisplayStatusBar.triggered.connect(self.DisplayChangeStatusBar)
+        self.acDisplayStatusBar.setCheckable(True)
 
         acVersion = QAction(self.tr("バージョン情報"),self)
         acVersion.triggered.connect(self.versionInfo)
@@ -73,7 +76,7 @@ class MainWindow(QMainWindow):
         mFile.addAction(acOpenFile)
         mFile.addAction(acChange)
         mEdit.addAction(acSetting)
-        mDisplay.addAction(acDisplayStatusBar)
+        mDisplay.addAction(self.acDisplayStatusBar)
         mHelp.addAction(acVersion)
 
     def file_choose(self):
@@ -96,7 +99,7 @@ class MainWindow(QMainWindow):
             self.HTML_text = convert_text
         self.ChangeButton.setDisabled(False)
         if(self.NowSetting["Change__ChangeTool"] == "xhtml2pdf"):
-            #self.HTML_text = self.HTML_text[:self.HTML_text.find("<html>")+6] + "\n@font-face {font-family: \"my_lang\"; src: url(" + ");}" html, body {font-family: "my_lang";}"
+            #self.HTML_text = self.HTML_text[:self.HTML_text.find("<html>")+6] + "\n@font-face {font-family: "my_lang\"; src: url(" + ");}" html, body {font-family: "my_lang";}"
             pass
         self.Preview.setHtml(self.HTML_text)
 
@@ -119,7 +122,7 @@ class MainWindow(QMainWindow):
 
 
     def SettingDialog(self):
-        sd = SettingDialog()
+        sd = SettingDialog(self)
         sd.exec()
 
     def versionInfo(self):
@@ -130,12 +133,32 @@ class MainWindow(QMainWindow):
     def DisplayChangeStatusBar(self):
         if self.StatusBar.isVisible():
             self.StatusBar.setVisible(False)
+            self.acDisplayStatusBar.setChecked(False)
+            self.ChangedList["Main__DisplayStatusBar"] = False
+            self.ChangeSetting()
         else:
             self.StatusBar.setVisible(True)
+            self.acDisplayStatusBar.setChecked(True)
+            self.ChangedList["Main__DisplayStatusBar"] = True
+            self.StatusBar.showMessage(self.tr("ステータスバーの表示が有効になりました"))
+            self.ChangeSetting()
+
+    def MainDisplaySomethings(self):
+        if self.NowSetting["Main__DisplayStatusBar"]:
+            self.acDisplayStatusBar.setChecked(True)
+            self.StatusBar.showMessage(self.tr("正常に起動しました"))
+        else:
+            self.acDisplayStatusBar.setChecked(False)
+
+    def ChangeSetting(self):
+        for key, value in self.ChangedList.items():
+                self.settings.setValue(key.replace("__","/"),str(value))
+                self.NowSetting[key] = value
 
 class SettingDialog(QDialog):
-    def __init__(self):
+    def __init__(self,mainwin):
         super().__init__()
+        self.mainwin = mainwin
 
         self.setWindowTitle(self.tr("設定"))
         mainlayout = QVBoxLayout()
@@ -147,7 +170,7 @@ class SettingDialog(QDialog):
         self.stab.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
         self.stab.setFixedWidth(80)
         self.sdetail = QStackedWidget()
-        self.sdetail.addWidget(self.wrap_scroll(Setting_Change()))
+        self.sdetail.addWidget(self.wrap_scroll(Setting_Change(self.mainwin)))
         self.sdetail.addWidget(self.wrap_scroll(Setting_Display()))
 
         self.save_button = QPushButton(self.tr("設定を反映"))
@@ -173,28 +196,26 @@ class SettingDialog(QDialog):
         return scroll
     
     def SaveSetting(self):
-        print(window.ChangedList)
-        if window.ChangedList == window.NowSetting:
-            pass
+        if self.mainwin.ChangedList == self.mainwin.NowSetting:
+            QMessageBox.information(self,self.tr("一応通知"), self.tr("設定は変更されていません"))
         else:
-            for key, value in window.ChangedList.items():
-                window.settings.setValue(key.replace("__","/"),str(value))
-                window.NowSetting[key] = value
+            self.mainwin.ChangeSetting()
 
 
 class Setting_Change(QWidget):
-    def __init__(self):
+    def __init__(self, mainwin):
         super().__init__()
+        self.mainwin = mainwin
         self.SCLayout = QFormLayout()
         self.setLayout(self.SCLayout)
 
         ChangeTool = QComboBox()
         ChangeTool.addItems(["weasyprint","xhtml2pdf"])
-        ChangeTool.setCurrentText(window.NowSetting["Change__ChangeTool"])
-        ChangeTool.currentIndexChanged.connect(lambda _ : (window.ChangedList.update(Change__ChangeTool = ChangeTool.currentText())))
+        ChangeTool.setCurrentText(self.mainwin.NowSetting["Change__ChangeTool"])
+        ChangeTool.currentIndexChanged.connect(lambda _ : (self.mainwin.ChangedList.update(Change__ChangeTool = ChangeTool.currentText())))
         ChangeCompletedDialog = QCheckBox(self.tr("表示する"))
-        ChangeCompletedDialog.setChecked(window.NowSetting["Change__ChangeCompletedDialog"])
-        ChangeCompletedDialog.stateChanged.connect(lambda _ : (window.ChangedList.update(Change__ChangeCompletedDialog = ChangeCompletedDialog.isChecked())))
+        ChangeCompletedDialog.setChecked(self.mainwin.NowSetting["Change__ChangeCompletedDialog"])
+        ChangeCompletedDialog.stateChanged.connect(lambda _ : (self.mainwin.ChangedList.update(Change__ChangeCompletedDialog = ChangeCompletedDialog.isChecked())))
 
         self.SCLayout.addRow(self.tr("変換ツール"), ChangeTool)
         self.SCLayout.addRow(self.tr("変換完了通知"), ChangeCompletedDialog)
