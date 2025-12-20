@@ -15,14 +15,16 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.ChangedList = {}
         self.settings = QSettings("HoshiYakiImo", "md2pdfViewer")
+        self.loadSetting(self.settings)
 
-        self.NowSetting = {"Change__ChangeTool" : self.settings.value("Change/ChangeTool", "weasyprint"),
-                           "Change__ChangeCompletedDialog" : self.settings.value("Change/ChangeCompletedDialog", True, type = bool),
-                           "Display__StatusBar" : self.settings.value("Display/StatusBar", True, type = bool),
-                           "Display__ChangeButton" : self.settings.value("Display/ChangeButton", True, type = bool)
-                           }
 
         self.MAKEWINDOW()
+
+    def loadSetting(self,settings):
+        self.NowSetting = {"Change__ChangeTool" : settings.value("Change/ChangeTool", "weasyprint"),
+                           "Change__ChangeCompletedDialog" : settings.value("Change/ChangeCompletedDialog", True, type = bool),
+                           "Display__StatusBar" : settings.value("Display/StatusBar", True, type = bool),
+                           "Display__ChangeButton" : settings.value("Display/ChangeButton", True, type = bool)}
 
     def MAKEWINDOW(self):
         self.setWindowTitle(self.tr("md2pdfViewer"))
@@ -42,6 +44,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(centralWidget)
         self.StatusBar = self.statusBar()
         self.setStatusBar(self.StatusBar)
+        self.StatusBar.showMessage(self.tr("正常に起動しました"))
 
 
     def makeMenuBar(self):
@@ -60,6 +63,9 @@ class MainWindow(QMainWindow):
         acSetting = QAction(self.tr("設定"),self)
         acSetting.triggered.connect(self.SettingDialog)
 
+        acDisplayStatusBar = QAction(self.tr("ステータスバー"),self)
+        acDisplayStatusBar.triggered.connect(self.DisplayChangeStatusBar)
+
         acVersion = QAction(self.tr("バージョン情報"),self)
         acVersion.triggered.connect(self.versionInfo)
 
@@ -67,6 +73,7 @@ class MainWindow(QMainWindow):
         mFile.addAction(acOpenFile)
         mFile.addAction(acChange)
         mEdit.addAction(acSetting)
+        mDisplay.addAction(acDisplayStatusBar)
         mHelp.addAction(acVersion)
 
     def file_choose(self):
@@ -119,6 +126,12 @@ class MainWindow(QMainWindow):
         from version import __version__
         dig = InformationDialog(self.tr("バージョン情報"), "md2pdfViewer\nVersion : "+ __version__)
         dig.exec()
+
+    def DisplayChangeStatusBar(self):
+        if self.StatusBar.isVisible():
+            self.StatusBar.setVisible(False)
+        else:
+            self.StatusBar.setVisible(True)
 
 class SettingDialog(QDialog):
     def __init__(self):
