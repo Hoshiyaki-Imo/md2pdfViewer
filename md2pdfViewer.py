@@ -17,9 +17,14 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("HoshiYakiImo", "md2pdfViewer")
 
         self.NowSetting = {"Change__ChangeTool" : self.settings.value("Change/ChangeTool", "weasyprint"),
-                           "Change__ChangeCompletedDialog" : self.settings.value("Change/ChangeCompletedDialog", True, type = bool)
+                           "Change__ChangeCompletedDialog" : self.settings.value("Change/ChangeCompletedDialog", True, type = bool),
+                           "Display__StatusBar" : self.settings.value("Display/StatusBar", True, type = bool),
+                           "Display__ChangeButton" : self.settings.value("Display/ChangeButton", True, type = bool)
                            }
 
+        self.MAKEWINDOW()
+
+    def MAKEWINDOW(self):
         self.setWindowTitle(self.tr("md2pdfViewer"))
         self.resize(800,600)
         self.makeMenuBar()
@@ -27,39 +32,42 @@ class MainWindow(QMainWindow):
 
         self.Preview = QWebEngineView()
         MainLayout.addWidget(self.Preview)
-        self.ChangeButton = QPushButton(self.tr("変換"))
-        self.ChangeButton.clicked.connect(self.Change)
-        self.ChangeButton.setDisabled(True)
-        FileChooseLayout = QHBoxLayout()
-        self.FileChooseButton = QPushButton(self.tr("ファイルを選択"))
-        self.FileChooseButton.clicked.connect(self.file_choose)
-        self.FileName = QLabel("")
-        
-        FileChooseLayout.addWidget(self.FileName)
-        FileChooseLayout.addWidget(self.FileChooseButton)
-
-        MainLayout.addLayout(FileChooseLayout)
-        MainLayout.addWidget(self.ChangeButton)
+        if self.NowSetting["Display__ChangeButton"]:
+            self.ChangeButton = QPushButton(self.tr("変換"))
+            self.ChangeButton.clicked.connect(self.Change)
+            self.ChangeButton.setDisabled(True)
+            MainLayout.addWidget(self.ChangeButton)
         centralWidget = QWidget()
         centralWidget.setLayout(MainLayout)
         self.setCentralWidget(centralWidget)
         self.StatusBar = self.statusBar()
         self.setStatusBar(self.StatusBar)
 
+
     def makeMenuBar(self):
         #メニューバーの作成
         MenuBar = self.menuBar()
         mFile = MenuBar.addMenu(self.tr("ファイル"))
         mEdit = MenuBar.addMenu(self.tr("編集"))
+        mDisplay = MenuBar.addMenu(self.tr("表示"))
         mHelp = MenuBar.addMenu(self.tr("ヘルプ"))
 
+        acOpenFile = QAction(self.tr("ファイルを開く"), self)
+        acOpenFile.triggered.connect(self.file_choose)
+        acChange = QAction(self.tr("変換"), self)
+        acChange.triggered.connect(self.Change)
 
         acSetting = QAction(self.tr("設定"),self)
         acSetting.triggered.connect(self.SettingDialog)
 
-        #メニューバーにアクションを追加
+        acVersion = QAction(self.tr("バージョン情報"),self)
+        acVersion.triggered.connect(self.versionInfo)
 
+        #メニューバーにアクションを追加
+        mFile.addAction(acOpenFile)
+        mFile.addAction(acChange)
         mEdit.addAction(acSetting)
+        mHelp.addAction(acVersion)
 
     def file_choose(self):
         self.filename, tmp = QFileDialog.getOpenFileName(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
@@ -88,7 +96,8 @@ class MainWindow(QMainWindow):
     def Change(self):
         output_filename = os.path.splitext(self.filename)[0] + ".pdf"
         if os.path.isfile(output_filename):
-            
+            if not QMessageBox.question(self, self.tr("上書き確認"), self.tr("pdfファイルは既に存在しています。\n上書きしますか？")):
+                return
         if(self.NowSetting["Change__ChangeTool"] == "weasyprint"):
             from weasyprint import HTML
             HTML(string = self.HTML_text).write_pdf(output_filename)
@@ -105,6 +114,11 @@ class MainWindow(QMainWindow):
     def SettingDialog(self):
         sd = SettingDialog()
         sd.exec()
+
+    def versionInfo(self):
+        from version import __version__
+        dig = InformationDialog(self.tr("バージョン情報"), "md2pdfViewer\nVersion : "+ __version__)
+        dig.exec()
 
 class SettingDialog(QDialog):
     def __init__(self):
@@ -175,6 +189,15 @@ class Setting_Change(QWidget):
 class Setting_Display(QWidget):
     def __init__(self):
         super().__init__()
+
+class InformationDialog(QDialog):
+    def __init__(self, wintitle = "Title", wincontent = "Content", width = 200, height = 100):
+        super().__init__()
+        self.setWindowTitle(wintitle)
+        self.resize(width,height)
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel(wincontent))
+        self.setLayout(layout)
 
 
 if __name__ == "__main__":
