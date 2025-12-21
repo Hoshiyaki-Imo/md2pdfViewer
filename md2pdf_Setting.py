@@ -3,7 +3,6 @@ class SettingDialog(QDialog):
     def __init__(self,mainwin):
         super().__init__()
         self.mainwin = mainwin
-        import md2pdf_Setting
 
         self.setWindowTitle(self.tr("設定"))
         mainlayout = QVBoxLayout()
@@ -15,7 +14,7 @@ class SettingDialog(QDialog):
         self.stab.setFixedWidth(80)
         self.sdetail = QStackedWidget()
         self.sdetail.addWidget(self.wrap_scroll(Setting_Change(self.mainwin)))
-        self.sdetail.addWidget(self.wrap_scroll(Setting_Display()))
+        self.sdetail.addWidget(self.wrap_scroll(Setting_Display(self.mainwin)))
 
         self.save_button = QPushButton(self.tr("設定を反映"))
         self.save_button.clicked.connect(self.SaveSetting)
@@ -44,7 +43,7 @@ class SettingDialog(QDialog):
         else:
             self.mainwin.ChangeSetting()
 
-            
+
 class Setting_Change(QWidget):
     def __init__(self, mainwin):
         super().__init__()
@@ -64,5 +63,13 @@ class Setting_Change(QWidget):
         self.SCLayout.addRow(self.tr("変換完了通知"), ChangeCompletedDialog)
 
 class Setting_Display(QWidget):
-    def __init__(self):
+    def __init__(self, mainwin):
         super().__init__()
+        self.mainwin = mainwin
+        self.SDLayout = QFormLayout()
+        self.setLayout(self.SDLayout)
+        DisplayChangeButton = QCheckBox(self.tr("表示する"))
+        DisplayChangeButton.setChecked(self.mainwin.ConfirmedSetting["Display__ChangeButton"])
+        DisplayChangeButton.stateChanged.connect(lambda _ : (self.mainwin.BeingEditedList.update(Display__ChangeButton = DisplayChangeButton.isChecked())))
+
+        self.SDLayout.addRow(self.tr("変換ボタン"), DisplayChangeButton)

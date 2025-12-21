@@ -24,7 +24,6 @@ class MainWindow(QMainWindow):
         self.ConfirmedSetting = {"Main__DisplayStatusBar" : settings.value("Main/DisplayStatusBar", True, type = bool),
                            "Change__ChangeTool" : settings.value("Change/ChangeTool", "weasyprint"),
                            "Change__ChangeCompletedDialog" : settings.value("Change/ChangeCompletedDialog", True, type = bool),
-                           "Display__StatusBar" : settings.value("Display/StatusBar", True, type = bool),
                            "Display__ChangeButton" : settings.value("Display/ChangeButton", True, type = bool)}
         self.BeingEditedList = {}
         for key, value in self.ConfirmedSetting.items():
@@ -34,17 +33,17 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(self.tr("md2pdfViewer"))
         self.resize(800,600)
         self.makeMenuBar()
-        MainLayout = QVBoxLayout()
+        self.MainWinMainLayout = QVBoxLayout()
 
         self.Preview = QWebEngineView()
-        MainLayout.addWidget(self.Preview)
+        self.MainWinMainLayout.addWidget(self.Preview)
         centralWidget = QWidget()
-        centralWidget.setLayout(MainLayout)
+        centralWidget.setLayout(self.MainWinMainLayout)
         self.setCentralWidget(centralWidget)
         self.StatusBar = self.statusBar()
         self.setStatusBar(self.StatusBar)
 
-        self.MainDisplaySomethings(MainLayout)
+        self.MainDisplaySomethings()
 
     def restart(self):
         self.ChangeButton.setDisabled(True)
@@ -102,9 +101,9 @@ class MainWindow(QMainWindow):
             self.HTML_text = md.convert(convert_text)
         elif extension == ".html" or extension == ".htm":
             self.HTML_text = convert_text
-        if(self.ConfirmedSetting["Change__ChangeTool"] == "xhtml2pdf"):
+        #if(self.ConfirmedSetting["Change__ChangeTool"] == "xhtml2pdf"):
             #self.HTML_text = self.HTML_text[:self.HTML_text.find("<html>")+6] + "\n@font-face {font-family: "my_lang\"; src: url(" + ");}" html, body {font-family: "my_lang";}"
-            pass
+            #pass
         self.Preview.setHtml(self.HTML_text)
         self.ChangeOK()
 
@@ -137,40 +136,38 @@ class MainWindow(QMainWindow):
         dig.exec()
 
     def DisplayChangeStatusBar(self):
-        if self.StatusBar.isVisible():
-            self.StatusBar.setVisible(False)
-            self.acDisplayStatusBar.setChecked(False)
-            self.BeingEditedList["Main__DisplayStatusBar"] = False
-            self.ChangeSetting()
-        else:
-            self.StatusBar.setVisible(True)
-            self.acDisplayStatusBar.setChecked(True)
-            self.BeingEditedList["Main__DisplayStatusBar"] = True
-            self.StatusBar.showMessage(self.tr("ステータスバーの表示が有効になりました"))
-            self.ChangeSetting()
+        self.BeingEditedList["Main__DisplayStatusBar"] = False if self.ConfirmedSetting["Main__DisplayStatusBar"] else True
+        self.ChangeSetting()
 
-    def MainDisplaySomethings(self, mainlayout):
-        if self.ConfirmedSetting["Display__ChangeButton"]:
-            self.ChangeButton = QPushButton(self.tr("変換"))
-            self.ChangeButton.clicked.connect(self.Change)
-            mainlayout.addWidget(self.ChangeButton)
-        if self.ConfirmedSetting["Main__DisplayStatusBar"]:
-            self.acDisplayStatusBar.setChecked(True)
-            self.StatusBar.showMessage(self.tr("正常に起動しました"))
-        else:
-            self.acDisplayStatusBar.setChecked(False)
+    #First once
+    def MainDisplaySomethings(self):
+        self.ChangeButton = QPushButton(self.tr("変換"))
+        self.ChangeButton.clicked.connect(self.Change)
+        self.MainWinMainLayout.addWidget(self.ChangeButton)
+        self.ChangeButton.setVisible(True if self.ConfirmedSetting["Display__ChangeButton"] else False)
+        self.acDisplayStatusBar.setVisible(True if self.ConfirmedSetting["Main__DisplayStatusBar"] else False)
+        self.acDisplayStatusBar.setChecked(True if self.ConfirmedSetting["Main__DisplayStatusBar"] else False)
 
     def ChangeSetting(self):
         for key, value in self.BeingEditedList.items():
                 self.settings.setValue(key.replace("__","/"),str(value))
                 self.ConfirmedSetting[key] = value
+        self.AfterSettingRefresh()
 
     def ChangeOK(self):
         self.ChangeButton.setDisabled(False)
         self.acClose.setDisabled(False)
 
-
-
+    #many times uses --do not use MainDisplaySomethings--
+    def AfterSettingRefresh(self):
+        self.ChangeButton.setVisible(True if self.ConfirmedSetting["Display__ChangeButton"] else False)
+        print(self.ConfirmedSetting["Main__DisplayStatusBar"])
+        if self.ConfirmedSetting["Main__DisplayStatusBar"]:
+            self.StatusBar.setVisible(True)
+            self.acDisplayStatusBar.setChecked(True)
+        else:
+            self.StatusBar.setVisible(False)
+            self.acDisplayStatusBar.setChecked(False)
 
 
 
