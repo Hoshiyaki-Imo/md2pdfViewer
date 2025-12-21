@@ -18,6 +18,7 @@ class MainWindow(QMainWindow):
 
 
         self.MAKEWINDOW()
+        self.restart()
 
     def loadSetting(self,settings):
         self.ConfirmedSetting = {"Main__DisplayStatusBar" : settings.value("Main/DisplayStatusBar", True, type = bool),
@@ -37,18 +38,17 @@ class MainWindow(QMainWindow):
 
         self.Preview = QWebEngineView()
         MainLayout.addWidget(self.Preview)
-        if self.ConfirmedSetting["Display__ChangeButton"]:
-            self.ChangeButton = QPushButton(self.tr("変換"))
-            self.ChangeButton.clicked.connect(self.Change)
-            self.ChangeButton.setDisabled(True)
-            MainLayout.addWidget(self.ChangeButton)
         centralWidget = QWidget()
         centralWidget.setLayout(MainLayout)
         self.setCentralWidget(centralWidget)
         self.StatusBar = self.statusBar()
         self.setStatusBar(self.StatusBar)
 
-        self.MainDisplaySomethings()
+        self.MainDisplaySomethings(MainLayout)
+
+    def restart(self):
+        self.ChangeButton.setDisabled(True)
+        self.acChange.setDisabled(True)
 
 
     def makeMenuBar(self):
@@ -61,8 +61,10 @@ class MainWindow(QMainWindow):
 
         acOpenFile = QAction(self.tr("ファイルを開く"), self)
         acOpenFile.triggered.connect(self.file_choose)
-        acChange = QAction(self.tr("変換"), self)
-        acChange.triggered.connect(self.Change)
+        self.acChange = QAction(self.tr("変換"), self)
+        self.acChange.triggered.connect(self.Change)
+        self.acClose = QAction(self.tr("ソフトを終了"), self)
+        self.acClose.triggered.connect(lambda _ : sys.exit())
 
         acSetting = QAction(self.tr("設定"),self)
         acSetting.triggered.connect(self.SettingDialog)
@@ -76,7 +78,8 @@ class MainWindow(QMainWindow):
 
         #メニューバーにアクションを追加
         mFile.addAction(acOpenFile)
-        mFile.addAction(acChange)
+        mFile.addAction(self.acChange)
+        mFile.addAction(self.acClose)
         mEdit.addAction(acSetting)
         mDisplay.addAction(self.acDisplayStatusBar)
         mHelp.addAction(acVersion)
@@ -99,11 +102,11 @@ class MainWindow(QMainWindow):
             self.HTML_text = md.convert(convert_text)
         elif extension == ".html" or extension == ".htm":
             self.HTML_text = convert_text
-        self.ChangeButton.setDisabled(False)
         if(self.ConfirmedSetting["Change__ChangeTool"] == "xhtml2pdf"):
             #self.HTML_text = self.HTML_text[:self.HTML_text.find("<html>")+6] + "\n@font-face {font-family: "my_lang\"; src: url(" + ");}" html, body {font-family: "my_lang";}"
             pass
         self.Preview.setHtml(self.HTML_text)
+        self.ChangeOK()
 
     def Change(self):
         output_filename = os.path.splitext(self.filename)[0] + ".pdf"
@@ -127,7 +130,6 @@ class MainWindow(QMainWindow):
         sd = SettingDialog(self)
         sd.exec()
 
-
     def versionInfo(self):
         from version import __version__
         dig = InformationDialog(self.tr("バージョン情報"), "md2pdfViewer\nVersion : "+ __version__)
@@ -146,7 +148,11 @@ class MainWindow(QMainWindow):
             self.StatusBar.showMessage(self.tr("ステータスバーの表示が有効になりました"))
             self.ChangeSetting()
 
-    def MainDisplaySomethings(self):
+    def MainDisplaySomethings(self, mainlayout):
+        if self.ConfirmedSetting["Display__ChangeButton"]:
+            self.ChangeButton = QPushButton(self.tr("変換"))
+            self.ChangeButton.clicked.connect(self.Change)
+            mainlayout.addWidget(self.ChangeButton)
         if self.ConfirmedSetting["Main__DisplayStatusBar"]:
             self.acDisplayStatusBar.setChecked(True)
             self.StatusBar.showMessage(self.tr("正常に起動しました"))
@@ -157,6 +163,10 @@ class MainWindow(QMainWindow):
         for key, value in self.BeingEditedList.items():
                 self.settings.setValue(key.replace("__","/"),str(value))
                 self.ConfirmedSetting[key] = value
+
+    def ChangeOK(self):
+        self.ChangeButton.setDisabled(False)
+        self.acClose.setDisabled(False)
 
 class SettingDialog(QDialog):
     def __init__(self,mainwin):
