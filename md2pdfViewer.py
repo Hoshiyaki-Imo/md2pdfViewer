@@ -13,7 +13,6 @@ class MainWindow(QMainWindow):
     def __init__(self, parent=None):
         # 親クラスの初期化
         super().__init__(parent)
-        self.ChangedList = {}
         self.settings = QSettings("HoshiYakiImo", "md2pdfViewer")
         self.loadSetting(self.settings)
 
@@ -21,11 +20,14 @@ class MainWindow(QMainWindow):
         self.MAKEWINDOW()
 
     def loadSetting(self,settings):
-        self.NowSetting = {"Main__DisplayStatusBar" : settings.value("Main/DisplayStatusBar", True, type = bool),
+        self.ConfirmedSetting = {"Main__DisplayStatusBar" : settings.value("Main/DisplayStatusBar", True, type = bool),
                            "Change__ChangeTool" : settings.value("Change/ChangeTool", "weasyprint"),
                            "Change__ChangeCompletedDialog" : settings.value("Change/ChangeCompletedDialog", True, type = bool),
                            "Display__StatusBar" : settings.value("Display/StatusBar", True, type = bool),
                            "Display__ChangeButton" : settings.value("Display/ChangeButton", True, type = bool)}
+        self.BeingEditedList = {}
+        for key, value in self.ConfirmedSetting.items():
+                self.BeingEditedList[key.replace("/","__")] = value
 
     def MAKEWINDOW(self):
         self.setWindowTitle(self.tr("md2pdfViewer"))
@@ -35,7 +37,7 @@ class MainWindow(QMainWindow):
 
         self.Preview = QWebEngineView()
         MainLayout.addWidget(self.Preview)
-        if self.NowSetting["Display__ChangeButton"]:
+        if self.ConfirmedSetting["Display__ChangeButton"]:
             self.ChangeButton = QPushButton(self.tr("変換"))
             self.ChangeButton.clicked.connect(self.Change)
             self.ChangeButton.setDisabled(True)
@@ -98,7 +100,7 @@ class MainWindow(QMainWindow):
         elif extension == ".html" or extension == ".htm":
             self.HTML_text = convert_text
         self.ChangeButton.setDisabled(False)
-        if(self.NowSetting["Change__ChangeTool"] == "xhtml2pdf"):
+        if(self.ConfirmedSetting["Change__ChangeTool"] == "xhtml2pdf"):
             #self.HTML_text = self.HTML_text[:self.HTML_text.find("<html>")+6] + "\n@font-face {font-family: "my_lang\"; src: url(" + ");}" html, body {font-family: "my_lang";}"
             pass
         self.Preview.setHtml(self.HTML_text)
@@ -108,14 +110,14 @@ class MainWindow(QMainWindow):
         if os.path.isfile(output_filename):
             if not QMessageBox.question(self, self.tr("上書き確認"), self.tr("pdfファイルは既に存在しています。\n上書きしますか？")):
                 return
-        if(self.NowSetting["Change__ChangeTool"] == "weasyprint"):
+        if(self.ConfirmedSetting["Change__ChangeTool"] == "weasyprint"):
             from weasyprint import HTML
             HTML(string = self.HTML_text).write_pdf(output_filename)
-        elif(self.NowSetting["Change__ChangeTool"] == "xhtml2pdf"):
+        elif(self.ConfirmedSetting["Change__ChangeTool"] == "xhtml2pdf"):
             from xhtml2pdf import pisa
             with open(output_filename, "w+b") as file:
                 pisa_status = pisa.CreatePDF(src=self.HTML_text, dest=file)
-        if os.path.isfile(output_filename) and self.NowSetting["Change__ChangeCompletedDialog"]:
+        if os.path.isfile(output_filename) and self.ConfirmedSetting["Change__ChangeCompletedDialog"]:
             QMessageBox.information(self, self.tr("変換成功"), self.tr("ファイルの変換に成功しました"))
         elif not os.path.isfile(output_filename):
             QMessageBox.warning(self, self.tr("エラー"), self.tr("変換時にエラーが発生しました"))
@@ -124,6 +126,7 @@ class MainWindow(QMainWindow):
     def SettingDialog(self):
         sd = SettingDialog(self)
         sd.exec()
+
 
     def versionInfo(self):
         from version import __version__
@@ -134,26 +137,26 @@ class MainWindow(QMainWindow):
         if self.StatusBar.isVisible():
             self.StatusBar.setVisible(False)
             self.acDisplayStatusBar.setChecked(False)
-            self.ChangedList["Main__DisplayStatusBar"] = False
+            self.BeingEditedList["Main__DisplayStatusBar"] = False
             self.ChangeSetting()
         else:
             self.StatusBar.setVisible(True)
             self.acDisplayStatusBar.setChecked(True)
-            self.ChangedList["Main__DisplayStatusBar"] = True
+            self.BeingEditedList["Main__DisplayStatusBar"] = True
             self.StatusBar.showMessage(self.tr("ステータスバーの表示が有効になりました"))
             self.ChangeSetting()
 
     def MainDisplaySomethings(self):
-        if self.NowSetting["Main__DisplayStatusBar"]:
+        if self.ConfirmedSetting["Main__DisplayStatusBar"]:
             self.acDisplayStatusBar.setChecked(True)
             self.StatusBar.showMessage(self.tr("正常に起動しました"))
         else:
             self.acDisplayStatusBar.setChecked(False)
 
     def ChangeSetting(self):
-        for key, value in self.ChangedList.items():
+        for key, value in self.BeingEditedList.items():
                 self.settings.setValue(key.replace("__","/"),str(value))
-                self.NowSetting[key] = value
+                self.ConfirmedSetting[key] = value
 
 class SettingDialog(QDialog):
     def __init__(self,mainwin):
@@ -166,7 +169,6 @@ class SettingDialog(QDialog):
 
         self.stab = QListWidget()
         self.stab.addItems([self.tr("変換"),self.tr("表示")])
-        self.stab.itemClicked.connect(self.stabChanged)
         self.stab.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
         self.stab.setFixedWidth(80)
         self.sdetail = QStackedWidget()
@@ -186,17 +188,16 @@ class SettingDialog(QDialog):
         abovelayout.addWidget(self.stab,1)
         abovelayout.addWidget(self.sdetail)
 
-    def stabChanged(self):
-        pass
+
 
     def wrap_scroll(self, widget : QWidget):
         scroll = QScrollArea()
         scroll.setWidget(widget)
         scroll.setWidgetResizable(True)
         return scroll
-    
+
     def SaveSetting(self):
-        if self.mainwin.ChangedList == self.mainwin.NowSetting:
+        if self.mainwin.BeingEditedList == self.mainwin.ConfirmedSetting:
             QMessageBox.information(self,self.tr("一応通知"), self.tr("設定は変更されていません"))
         else:
             self.mainwin.ChangeSetting()
@@ -211,11 +212,11 @@ class Setting_Change(QWidget):
 
         ChangeTool = QComboBox()
         ChangeTool.addItems(["weasyprint","xhtml2pdf"])
-        ChangeTool.setCurrentText(self.mainwin.NowSetting["Change__ChangeTool"])
-        ChangeTool.currentIndexChanged.connect(lambda _ : (self.mainwin.ChangedList.update(Change__ChangeTool = ChangeTool.currentText())))
+        ChangeTool.setCurrentText(self.mainwin.ConfirmedSetting["Change__ChangeTool"])
+        ChangeTool.currentIndexChanged.connect(lambda _ : (self.mainwin.BeingEditedList.update(Change__ChangeTool = ChangeTool.currentText())))
         ChangeCompletedDialog = QCheckBox(self.tr("表示する"))
-        ChangeCompletedDialog.setChecked(self.mainwin.NowSetting["Change__ChangeCompletedDialog"])
-        ChangeCompletedDialog.stateChanged.connect(lambda _ : (self.mainwin.ChangedList.update(Change__ChangeCompletedDialog = ChangeCompletedDialog.isChecked())))
+        ChangeCompletedDialog.setChecked(self.mainwin.ConfirmedSetting["Change__ChangeCompletedDialog"])
+        ChangeCompletedDialog.stateChanged.connect(lambda _ : (self.mainwin.BeingEditedList.update(Change__ChangeCompletedDialog = ChangeCompletedDialog.isChecked())))
 
         self.SCLayout.addRow(self.tr("変換ツール"), ChangeTool)
         self.SCLayout.addRow(self.tr("変換完了通知"), ChangeCompletedDialog)
