@@ -84,16 +84,22 @@ class MainWindow(QMainWindow):
         mHelp.addAction(acVersion)
 
     def file_choose(self):
-        self.filename, tmp = QFileDialog.getOpenFileName(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
+        try:
+            self.filename, tmp = QFileDialog.getOpenFileName(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
+        except FileNotFoundError:
+            self.StatusBar.showMessage(self.tr("ファイルが選択されませんでした"))
+            return
         self.StatusBar.showMessage(self.tr("ファイルを開きました : " + str(self.filename)))
-        with open (self.filename,"rb") as f:
+        with open (self.filename,mode = "rb") as f:
             tmp = f.read()
-            result = chardet.detect(tmp)
-        if result["encoding"] == "SHIFT_JIS":
+            result = chardet.detect(tmp)["encoding"]
+        if QCborStringResultByteArray == "SHIFT_JIS":
             self.encoding = "CP932"
+        elif result == None:
+            self.encoding = "utf-8"
         else:
             self.encoding = result["encoding"]
-        with open(self.filename,"r", encoding = self.encoding) as f:
+        with open(self.filename,"r", encoding = self.encoding, errors = "replace") as f:
             convert_text = f.read()
         extension = os.path.splitext(self.filename)[1]
         if extension == ".md":
@@ -101,9 +107,6 @@ class MainWindow(QMainWindow):
             self.HTML_text = md.convert(convert_text)
         elif extension == ".html" or extension == ".htm":
             self.HTML_text = convert_text
-        #if(self.ConfirmedSetting["Change__ChangeTool"] == "xhtml2pdf"):
-            #self.HTML_text = self.HTML_text[:self.HTML_text.find("<html>")+6] + "\n@font-face {font-family: "my_lang\"; src: url(" + ");}" html, body {font-family: "my_lang";}"
-            #pass
         self.Preview.setHtml(self.HTML_text)
         self.ChangeOK()
 
@@ -152,22 +155,27 @@ class MainWindow(QMainWindow):
         for key, value in self.BeingEditedList.items():
                 self.settings.setValue(key.replace("__","/"),str(value))
                 self.ConfirmedSetting[key] = value
-        self.AfterSettingRefresh()
+        self.Refresh()
 
     def ChangeOK(self):
         self.ChangeButton.setDisabled(False)
         self.acClose.setDisabled(False)
+        #self.Refresh(self)
 
     #many times uses --do not use MainDisplaySomethings--
-    def AfterSettingRefresh(self):
+    def Refresh(self):
         self.ChangeButton.setVisible(True if self.ConfirmedSetting["Display__ChangeButton"] else False)
-        print(self.ConfirmedSetting["Main__DisplayStatusBar"])
         if self.ConfirmedSetting["Main__DisplayStatusBar"]:
             self.StatusBar.setVisible(True)
             self.acDisplayStatusBar.setChecked(True)
         else:
             self.StatusBar.setVisible(False)
             self.acDisplayStatusBar.setChecked(False)
+        '''if self.ConfirmedSetting["Change__OriginalFont"]:
+            if "<head>" in self.HTML_text:
+                css = self.ConfirmedSetting["Change__FontFamilyName"]
+                self.HTML_text = self.HTML_text.replace("<head>", f"<head><style>{css}</style>")'''
+
 
 
 
