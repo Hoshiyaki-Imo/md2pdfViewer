@@ -74,6 +74,8 @@ class MainWindow(QMainWindow):
 
         acVersion = QAction(self.tr("バージョン情報"),self)
         acVersion.triggered.connect(self.versionInfo)
+        acIcon = QAction(self.tr("アイコンを見る"), self)
+        acIcon.triggered.connect(self.showIcon)
 
         #メニューバーにアクションを追加
         mFile.addAction(acOpenFile)
@@ -82,6 +84,7 @@ class MainWindow(QMainWindow):
         mEdit.addAction(acSetting)
         mDisplay.addAction(self.acDisplayStatusBar)
         mHelp.addAction(acVersion)
+        mHelp.addAction(acIcon)
 
     def file_choose(self):
         try:
@@ -176,15 +179,23 @@ class MainWindow(QMainWindow):
                 css = self.ConfirmedSetting["Change__FontFamilyName"]
                 self.HTML_text = self.HTML_text.replace("<head>", f"<head><style>{css}</style>")'''
 
+    def showIcon(self):
+        dia = InformationDialog(self.tr("アイコン"), self.tr("md2pdfViewerのアイコン"), 300, 100, Icon = QPixmap("icon.ico").scaled(512, 512, Qt.IgnoreAspectRatio, Qt.FastTransformation))
+        dia.exec()
+
 
 
 
 class InformationDialog(QDialog):
-    def __init__(self, wintitle = "Title", wincontent = "Content", width = 200, height = 100):
+    def __init__(self, wintitle = "Title", wincontent = "Content", width = 200, height = 100, Icon = None):
         super().__init__()
         self.setWindowTitle(wintitle)
         self.resize(width,height)
         layout = QVBoxLayout()
+        iconlabel = QLabel()
+        iconlabel.setPixmap(Icon)
+
+        layout.addWidget(iconlabel)
         layout.addWidget(QLabel(wincontent))
         self.setLayout(layout)
 
@@ -196,6 +207,7 @@ if __name__ == "__main__":
     os.environ['QT_QPA_PLATFORM_PLUGIN_PATH'] = plugin_path
 
     app = QApplication(sys.argv)    # PySide6の実行
+    app.setWindowIcon(QIcon("icon.ico"))
     window = MainWindow()           # ユーザがコーディングしたクラス
     window.show()                   # PySide6のウィンドウを表示
     sys.exit(app.exec())            # PySide6の終了
