@@ -25,7 +25,8 @@ class MainWindow(QMainWindow):
         self.ConfirmedSetting = {"Main__DisplayStatusBar" : settings.value("Main/DisplayStatusBar", True, type = bool),
                            "Change__ChangeTool" : settings.value("Change/ChangeTool", "ChromiumPrint"),
                            "Change__ChangeCompletedDialog" : settings.value("Change/ChangeCompletedDialog", True, type = bool),
-                           "Display__ChangeButton" : settings.value("Display/ChangeButton", True, type = bool)}
+                           "Display__ChangeButton" : settings.value("Display/ChangeButton", True, type = bool),
+                           "Display__TabCloseButton" : settings.value("Display/TabCloseButton", False, type = bool)}
         self.BeingEditedList = {}
         for key, value in self.ConfirmedSetting.items():
                 self.BeingEditedList[key.replace("/","__")] = value
