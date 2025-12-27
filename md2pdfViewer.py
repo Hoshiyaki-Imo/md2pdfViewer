@@ -48,6 +48,7 @@ class MainWindow(QMainWindow):
     def restart(self):
         self.ChangeButton.setDisabled(True)
         self.acChange.setDisabled(True)
+        self.acCloseFile.setDisabled(True)
 
 
     def makeMenuBar(self):
@@ -60,10 +61,12 @@ class MainWindow(QMainWindow):
 
         acOpenFile = QAction(self.tr("ファイルを開く"), self)
         acOpenFile.triggered.connect(self.file_choose)
-        self.acChange = QAction(self.tr("変換"), self)
+        self.acChange = QAction(self.tr("現在のファイルを変換"), self)
         self.acChange.triggered.connect(self.Change)
-        self.acClose = QAction(self.tr("ソフトを終了"), self)
-        self.acClose.triggered.connect(lambda _ : sys.exit())
+        self.acCloseFile = QAction(self.tr("ファイルを閉じる"), self)
+        self.acCloseFile.triggered.connect(self.file_close)
+        self.acCloseApp = QAction(self.tr("ソフトを終了"), self)
+        self.acCloseApp.triggered.connect(lambda _ : sys.exit())
 
         acSetting = QAction(self.tr("設定"),self)
         acSetting.triggered.connect(self.SettingDialog)
@@ -80,7 +83,8 @@ class MainWindow(QMainWindow):
         #メニューバーにアクションを追加
         mFile.addAction(acOpenFile)
         mFile.addAction(self.acChange)
-        mFile.addAction(self.acClose)
+        mFile.addAction(self.acCloseFile)
+        mFile.addAction(self.acCloseApp)
         mEdit.addAction(acSetting)
         mDisplay.addAction(self.acDisplayStatusBar)
         mHelp.addAction(acVersion)
@@ -101,7 +105,7 @@ class MainWindow(QMainWindow):
         elif result == None:
             self.encoding = "utf-8"
         else:
-            self.encoding = result["encoding"]
+            self.encoding = result
         with open(self.filename,"r", encoding = self.encoding, errors = "replace") as f:
             convert_text = f.read()
         extension = os.path.splitext(self.filename)[1]
@@ -118,17 +122,13 @@ class MainWindow(QMainWindow):
         if os.path.isfile(output_filename):
             if not QMessageBox.question(self, self.tr("上書き確認"), self.tr("pdfファイルは既に存在しています。\n上書きしますか？")):
                 return
-        if(self.ConfirmedSetting["Change__ChangeTool"] == "weasyprint"):
-            from weasyprint import HTML
-            HTML(string = self.HTML_text).write_pdf(output_filename)
-        elif(self.ConfirmedSetting["Change__ChangeTool"] == "xhtml2pdf"):
-            from xhtml2pdf import pisa
-            with open(output_filename, "w+b") as file:
-                pisa_status = pisa.CreatePDF(src=self.HTML_text, dest=file)
-        if os.path.isfile(output_filename) and self.ConfirmedSetting["Change__ChangeCompletedDialog"]:
-            QMessageBox.information(self, self.tr("変換成功"), self.tr("ファイルの変換に成功しました"))
-        elif not os.path.isfile(output_filename):
-            QMessageBox.warning(self, self.tr("エラー"), self.tr("変換時にエラーが発生しました"))
+        self.wait = InformationDialog(self.tr("変換中"), self.tr("変換中です"))
+        self.wait.OffCloseButton()
+        self.wait.setModal(True)
+        self.changeWorker = Worker_Change(self.ConfirmedSetting["Change__ChangeTool"], self.HTML_text, output_filename)
+        self.changeWorker.finished.connect(self.ChangedDialog)
+        self.changeWorker.start()
+        self.wait.show()
 
 
     def SettingDialog(self):
@@ -147,7 +147,7 @@ class MainWindow(QMainWindow):
 
     #First once
     def MainDisplaySomethings(self):
-        self.ChangeButton = QPushButton(self.tr("変換"))
+        self.ChangeButton = QPushButton(self.tr("このファイルを変換"))
         self.ChangeButton.clicked.connect(self.Change)
         self.MainWinMainLayout.addWidget(self.ChangeButton)
         self.ChangeButton.setVisible(True if self.ConfirmedSetting["Display__ChangeButton"] else False)
@@ -162,8 +162,12 @@ class MainWindow(QMainWindow):
 
     def ChangeOK(self):
         self.ChangeButton.setDisabled(False)
-        self.acClose.setDisabled(False)
+        self.acCloseFile.setDisabled(False)
+        self.acChange.setDisabled(False)
         #self.Refresh(self)
+
+    def file_close(self):
+        pass
 
     #many times uses --do not use MainDisplaySomethings--
     def Refresh(self):
@@ -180,24 +184,58 @@ class MainWindow(QMainWindow):
                 self.HTML_text = self.HTML_text.replace("<head>", f"<head><style>{css}</style>")'''
 
     def showIcon(self):
-        dia = InformationDialog(self.tr("アイコン"), self.tr("md2pdfViewerのアイコン"), 300, 100, Icon = QPixmap("icon.ico").scaled(512, 512, Qt.IgnoreAspectRatio, Qt.FastTransformation))
+        dia = InformationDialog(self.tr("アイコン"), self.tr("md2pdfViewerのアイコン"), 300, 100)
+        dia.AddIcon(QPixmap("icon.ico").scaled(512, 512, Qt.IgnoreAspectRatio, Qt.FastTransformation))
         dia.exec()
 
+    def ChangedDialog(self, Changed):
+        self.wait.accept()
+        if Changed and self.ConfirmedSetting["Change__ChangeCompletedDialog"]:
+            QMessageBox.information(self, self.tr("変換成功"), self.tr("ファイルの変換に成功しました"))
+        elif not Changed:
+            QMessageBox.warning(self, self.tr("エラー"), self.tr("変換時にエラーが発生しました"))
 
 
 
 class InformationDialog(QDialog):
-    def __init__(self, wintitle = "Title", wincontent = "Content", width = 200, height = 100, Icon = None):
+    def __init__(self, wintitle = "Title", wincontent = "Content", width = 200, height = 100):
         super().__init__()
         self.setWindowTitle(wintitle)
         self.resize(width,height)
-        layout = QVBoxLayout()
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(QLabel(wincontent))
+        self.setLayout(self.layout)
+
+    def OffCloseButton(self):
+        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+
+    def AddIcon(self, Icon):
         iconlabel = QLabel()
         iconlabel.setPixmap(Icon)
+        self.layout.addWidget(iconlabel)
 
-        layout.addWidget(iconlabel)
-        layout.addWidget(QLabel(wincontent))
-        self.setLayout(layout)
+
+class Worker_Change(QThread):
+    finished = Signal(bool)
+
+    def __init__(self, tool, HTML_text, output_filename):
+        super().__init__()
+        self.tool = tool
+        self.HTML_text = HTML_text
+        self.output_filename = output_filename
+
+    def run(self):
+        try:
+            if(self.tool == "weasyprint"):
+                from weasyprint import HTML
+                HTML(string = self.HTML_text).write_pdf(self.output_filename)
+            elif(self.tool == "xhtml2pdf"):
+                from xhtml2pdf import pisa
+                with open(self.output_filename, "w+b") as file:
+                    pisa_status = pisa.CreatePDF(src=self.HTML_text, dest=file)
+            self.finished.emit(True)
+        except:
+            self.finished.emit(False)
 
 
 if __name__ == "__main__":
