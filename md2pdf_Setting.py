@@ -41,6 +41,7 @@ class SettingDialog(QDialog):
             QMessageBox.information(self,self.tr("一応通知"), self.tr("設定は変更されていません"))
         else:
             self.mainwin.ChangeSetting()
+            self.mainwin.StatusBar.showMessage(self.tr("設定が変更されました"))
 
 
 

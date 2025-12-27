@@ -24,7 +24,7 @@ class MainWindow(QMainWindow):
 
     def loadSetting(self,settings):
         self.ConfirmedSetting = {"Main__DisplayStatusBar" : settings.value("Main/DisplayStatusBar", True, type = bool),
-                           "Change__ChangeTool" : settings.value("Change/ChangeTool", "weasyprint"),
+                           "Change__ChangeTool" : settings.value("Change/ChangeTool", "ChromiumPrint"),
                            "Change__ChangeCompletedDialog" : settings.value("Change/ChangeCompletedDialog", True, type = bool),
                            "Display__ChangeButton" : settings.value("Display/ChangeButton", True, type = bool)}
         self.BeingEditedList = {}
@@ -154,7 +154,7 @@ class MainWindow(QMainWindow):
         self.ChangeButton.clicked.connect(self.Change)
         self.MainWinMainLayout.addWidget(self.ChangeButton)
         self.ChangeButton.setVisible(True if self.ConfirmedSetting["Display__ChangeButton"] else False)
-        self.acDisplayStatusBar.setVisible(True if self.ConfirmedSetting["Main__DisplayStatusBar"] else False)
+        self.StatusBar.setVisible(True if self.ConfirmedSetting["Main__DisplayStatusBar"] else False)
         self.acDisplayStatusBar.setChecked(True if self.ConfirmedSetting["Main__DisplayStatusBar"] else False)
 
 
