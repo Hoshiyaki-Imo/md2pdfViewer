@@ -15,6 +15,7 @@ class MainWindow(QMainWindow):
         # 親クラスの初期化
         super().__init__(parent)
         self.settings = QSettings("HoshiYakiImo", "md2pdfViewer")
+        self.doclist = [Document(None)]
         self.loadSetting(self.settings)
 
         self.MAKEWINDOW()
@@ -37,8 +38,9 @@ class MainWindow(QMainWindow):
         self.makeMenuBar()
         self.MainWinMainLayout = QVBoxLayout()
 
-        self.Preview = QWebEngineView()
-        self.MainWinMainLayout.addWidget(self.Preview)
+        self.newdoc = Document()
+        self.newdocview = DocumentView(self.newdoc)
+        self.MainWinMainLayout.addWidget(self.newdocview)
         centralWidget = QWidget()
         centralWidget.setLayout(self.MainWinMainLayout)
         self.setCentralWidget(centralWidget)
@@ -96,36 +98,25 @@ class MainWindow(QMainWindow):
 
     def file_choose(self):
         try:
-            self.nowFilename, tmp = QFileDialog.getOpenFileName(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
+            Filename, tmp = QFileDialog.getOpenFileName(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
         except FileNotFoundError:
             self.StatusBar.showMessage(self.tr("ファイルが選択されませんでした"))
             return
-        self.StatusBar.showMessage(self.tr("ファイルを開きました : " + str(self.nowFilename)))
-        with open (self.nowFilename,mode = "rb") as f:
-            tmp = f.read()
-            result = chardet.detect(tmp)["encoding"]
-        if result == "SHIFT_JIS":
-            self.encoding = "CP932"
-        elif result == None:
-            self.encoding = "utf-8"
-        else:
-            self.encoding = result
-        with open(self.nowFilename,"r", encoding = self.encoding, errors = "replace") as f:
-            convert_text = f.read()
-        extension = os.path.splitext(self.nowFilename)[1]
-        if extension == ".md":
-            md = markdown.Markdown()
-            self.nowHTML_text = md.convert(convert_text)
-        elif extension == ".html" or extension == ".htm":
-            self.nowHTML_text = convert_text
-        self.Preview.setHtml(self.nowHTML_text)
-        self.ChangeOK()
+        self.StatusBar.showMessage(self.tr("ファイルを開きました : " + str(Filename)))
+        self.doclist.append(Document(Filename))
+        self.ChangeButton.setDisabled(False)
+        self.acCloseFile.setDisabled(False)
+        self.acChange.setDisabled(False)
+        self.MainWinMainLayout.removeWidget(self.newdocview)
+        self.newdocview.deleteLater()
+        del self.doclist[0]
+        self.MainWinMainLayout.insertWidget(0, DocumentView(self.doclist[0]))
 
 
     def Change(self):
-        output_filename = os.path.splitext(self.nowFilename)[0] + ".pdf"
+        output_filename = os.path.splitext(self.doclist[0].filename)[0] + ".pdf"
         tool = self.ConfirmedSetting["Change__ChangeTool"]
-        HTML_text = self.nowHTML_text
+        HTML_text = self.doclist[0].HTML_text
 
         if os.path.isfile(output_filename):
             reply = QMessageBox.question(self, self.tr("上書き確認"), self.tr("pdfファイルは既に存在しています。\n上書きしますか？"), QMessageBox.Yes | QMessageBox.No)
@@ -172,13 +163,6 @@ class MainWindow(QMainWindow):
                 self.settings.setValue(key.replace("__","/"),str(value))
                 self.ConfirmedSetting[key] = value
         self.Refresh()
-
-
-    def ChangeOK(self):
-        self.ChangeButton.setDisabled(False)
-        self.acCloseFile.setDisabled(False)
-        self.acChange.setDisabled(False)
-        #self.Refresh(self)
 
 
     def file_close(self):
@@ -274,7 +258,7 @@ class Worker_Change(QThread):
     def __init__(self, tool, HTML_text, output_filename):
         super().__init__()
         self.tool = tool
-        self.nowHTML_text = HTML_text
+        self.HTML_text = HTML_text
         self.output_filename = output_filename
 
 
@@ -282,14 +266,51 @@ class Worker_Change(QThread):
         try:
             if(self.tool == "weasyprint"):
                 from weasyprint import HTML
-                HTML(string = self.nowHTML_text).write_pdf(self.output_filename)
+                HTML(string = self.HTML_text).write_pdf(self.output_filename)
             elif(self.tool == "xhtml2pdf"):
                 from xhtml2pdf import pisa
                 with open(self.output_filename, "w+b") as file:
-                    pisa_status = pisa.CreatePDF(src=self.nowHTML_text, dest=file)
+                    pisa_status = pisa.CreatePDF(src=self.HTML_text, dest=file)
             self.finished.emit(True)
         except:
             self.finished.emit(False)
+
+
+
+class Document(QObject):
+    def __init__(self, filename = None):
+        if not filename == None:
+            self.filename = filename
+            with open (self.filename,mode = "rb") as f:
+                tmp = f.read()
+                result = chardet.detect(tmp)["encoding"]
+            if result == "SHIFT_JIS":
+                self.encoding = "CP932"
+            elif result == None:
+                self.encoding = "utf-8"
+            else:
+                self.encoding = result
+            with open(self.filename,"r", encoding = self.encoding, errors = "replace") as f:
+                convert_text = f.read()
+            extension = os.path.splitext(self.filename)[1]
+            if extension == ".md":
+                md = markdown.Markdown()
+                self.HTML_text = md.convert(convert_text)
+            elif extension == ".html" or extension == ".htm":
+                self.HTML_text = convert_text
+        else:
+            self.HTML_text = ""
+            self.filename = self.tr("新しいファイル.md")
+
+
+class DocumentView(QWidget):
+    def __init__(self, doc : Document):
+        super().__init__()
+        self.Preview = QWebEngineView()
+        self.Preview.setHtml(doc.HTML_text)
+        self.layout = QHBoxLayout()
+        self.layout.addWidget(self.Preview)
+        self.setLayout(self.layout)
 
 
 
