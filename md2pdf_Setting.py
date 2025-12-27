@@ -22,13 +22,11 @@ class SettingDialog(QDialog):
         self.stab.currentRowChanged.connect(self.sdetail.setCurrentIndex)
         self.stab.setCurrentRow(0)
 
-
         self.setLayout(mainlayout)
         mainlayout.addLayout(abovelayout)
         mainlayout.addWidget(self.save_button)
         abovelayout.addWidget(self.stab,1)
         abovelayout.addWidget(self.sdetail)
-
 
 
     def wrap_scroll(self, widget : QWidget):
@@ -37,11 +35,13 @@ class SettingDialog(QDialog):
         scroll.setWidgetResizable(True)
         return scroll
 
+
     def SaveSetting(self):
         if self.mainwin.BeingEditedList == self.mainwin.ConfirmedSetting:
             QMessageBox.information(self,self.tr("一応通知"), self.tr("設定は変更されていません"))
         else:
             self.mainwin.ChangeSetting()
+
 
 
 class Setting_Change(QWidget):
@@ -61,6 +61,8 @@ class Setting_Change(QWidget):
 
         self.SCLayout.addRow(self.tr("変換ツール"), ChangeTool)
         self.SCLayout.addRow(self.tr("変換完了通知"), ChangeCompletedDialog)
+
+
 
 class Setting_Display(QWidget):
     def __init__(self, mainwin):

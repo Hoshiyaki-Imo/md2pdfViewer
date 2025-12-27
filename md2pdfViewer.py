@@ -17,9 +17,9 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("HoshiYakiImo", "md2pdfViewer")
         self.loadSetting(self.settings)
 
-
         self.MAKEWINDOW()
         self.restart()
+
 
     def loadSetting(self,settings):
         self.ConfirmedSetting = {"Main__DisplayStatusBar" : settings.value("Main/DisplayStatusBar", True, type = bool),
@@ -29,6 +29,7 @@ class MainWindow(QMainWindow):
         self.BeingEditedList = {}
         for key, value in self.ConfirmedSetting.items():
                 self.BeingEditedList[key.replace("/","__")] = value
+
 
     def MAKEWINDOW(self):
         self.setWindowTitle(self.tr("md2pdfViewer"))
@@ -45,6 +46,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.StatusBar)
 
         self.MainDisplaySomethings()
+
 
     def restart(self):
         self.ChangeButton.setDisabled(True)
@@ -91,6 +93,7 @@ class MainWindow(QMainWindow):
         mHelp.addAction(acVersion)
         mHelp.addAction(acIcon)
 
+
     def file_choose(self):
         try:
             self.filename, tmp = QFileDialog.getOpenFileName(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
@@ -118,6 +121,7 @@ class MainWindow(QMainWindow):
         self.Preview.setHtml(self.HTML_text)
         self.ChangeOK()
 
+
     def Change(self):
         output_filename = os.path.splitext(self.filename)[0] + ".pdf"
         if os.path.isfile(output_filename):
@@ -140,14 +144,17 @@ class MainWindow(QMainWindow):
         sd = s.SettingDialog(self)
         sd.exec()
 
+
     def versionInfo(self):
         from version import __version__
         dig = InformationDialog(self.tr("バージョン情報"), "md2pdfViewer\nVersion : "+ __version__)
         dig.exec()
 
+
     def DisplayChangeStatusBar(self):
         self.BeingEditedList["Main__DisplayStatusBar"] = False if self.ConfirmedSetting["Main__DisplayStatusBar"] else True
         self.ChangeSetting()
+
 
     #First once
     def MainDisplaySomethings(self):
@@ -158,11 +165,13 @@ class MainWindow(QMainWindow):
         self.acDisplayStatusBar.setVisible(True if self.ConfirmedSetting["Main__DisplayStatusBar"] else False)
         self.acDisplayStatusBar.setChecked(True if self.ConfirmedSetting["Main__DisplayStatusBar"] else False)
 
+
     def ChangeSetting(self):
         for key, value in self.BeingEditedList.items():
                 self.settings.setValue(key.replace("__","/"),str(value))
                 self.ConfirmedSetting[key] = value
         self.Refresh()
+
 
     def ChangeOK(self):
         self.ChangeButton.setDisabled(False)
@@ -170,8 +179,10 @@ class MainWindow(QMainWindow):
         self.acChange.setDisabled(False)
         #self.Refresh(self)
 
+
     def file_close(self):
         pass
+
 
     #many times uses --do not use MainDisplaySomethings--
     def Refresh(self):
@@ -187,10 +198,12 @@ class MainWindow(QMainWindow):
                 css = self.ConfirmedSetting["Change__FontFamilyName"]
                 self.HTML_text = self.HTML_text.replace("<head>", f"<head><style>{css}</style>")'''
 
+
     def showIcon(self):
         dia = InformationDialog(self.tr("アイコン"), self.tr("md2pdfViewerのアイコン"), 300, 100)
         dia.AddIcon(QPixmap("icon.ico").scaled(512, 512, Qt.IgnoreAspectRatio, Qt.FastTransformation))
         dia.exec()
+
 
     def ChangedDialog(self, Changed):
         self.wait.accept()
@@ -198,6 +211,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, self.tr("変換成功"), self.tr("ファイルの変換に成功しました"))
         elif not Changed:
             QMessageBox.warning(self, self.tr("エラー"), self.tr("変換時にエラーが発生しました"))
+
 
     def PrintChromium(self, output_filename):
         self.page = QWebEnginePage(self)
@@ -224,13 +238,16 @@ class InformationDialog(QDialog):
         self.layout.addWidget(QLabel(wincontent))
         self.setLayout(self.layout)
 
+
     def OffCloseButton(self):
         self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+
 
     def AddIcon(self, Icon):
         iconlabel = QLabel()
         iconlabel.setPixmap(Icon)
         self.layout.addWidget(iconlabel)
+
 
 
 class Worker_Change(QThread):
@@ -241,6 +258,7 @@ class Worker_Change(QThread):
         self.tool = tool
         self.HTML_text = HTML_text
         self.output_filename = output_filename
+
 
     def run(self):
         try:
@@ -254,6 +272,7 @@ class Worker_Change(QThread):
             self.finished.emit(True)
         except:
             self.finished.emit(False)
+
 
 
 if __name__ == "__main__":
