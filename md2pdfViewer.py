@@ -15,7 +15,6 @@ class MainWindow(QMainWindow):
         # 親クラスの初期化
         super().__init__(parent)
         self.settings = QSettings("HoshiYakiImo", "md2pdfViewer")
-        self.doclist = [Document(None)]
         self.loadSetting(self.settings)
 
         self.MAKEWINDOW()
@@ -38,9 +37,13 @@ class MainWindow(QMainWindow):
         self.makeMenuBar()
         self.MainWinMainLayout = QVBoxLayout()
 
-        self.newdoc = Document()
-        self.newdocview = DocumentView(self.newdoc)
-        self.MainWinMainLayout.addWidget(self.newdocview)
+        self.tab = QTabWidget()
+        self.tab.setMovable(True)
+        self.tab.setTabsClosable(True)
+        self.tab.tabCloseRequested.connect(self.file_close)
+        self.newdocview = DocumentView(Document(None))
+        self.tab.addTab(self.newdocview, "NewFile")
+        self.MainWinMainLayout.addWidget(self.tab)
         centralWidget = QWidget()
         centralWidget.setLayout(self.MainWinMainLayout)
         self.setCentralWidget(centralWidget)
@@ -71,7 +74,7 @@ class MainWindow(QMainWindow):
         self.acCloseFile = QAction(self.tr("ファイルを閉じる"), self)
         self.acCloseFile.triggered.connect(self.file_close)
         self.acCloseApp = QAction(self.tr("ソフトを終了"), self)
-        self.acCloseApp.triggered.connect(lambda _ : sys.exit())
+        self.acCloseApp.triggered.connect(lambda _ : sys.exit(app.exec()))
 
         acSetting = QAction(self.tr("設定"),self)
         acSetting.triggered.connect(self.SettingDialog)
@@ -98,25 +101,27 @@ class MainWindow(QMainWindow):
 
     def file_choose(self):
         try:
-            Filename, tmp = QFileDialog.getOpenFileName(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
+            Filenames, tmp = QFileDialog.getOpenFileNames(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
         except FileNotFoundError:
             self.StatusBar.showMessage(self.tr("ファイルが選択されませんでした"))
             return
-        self.StatusBar.showMessage(self.tr("ファイルを開きました : " + str(Filename)))
-        self.doclist.append(Document(Filename))
+        if Filenames == []:
+            return
+        self.StatusBar.showMessage(self.tr("ファイルを開きました"))
+        for iFilename in Filenames:
+            doc = Document(iFilename)
+            docview = DocumentView(doc)
+            self.tab.addTab(docview, os.path.basename(doc.filename))
+            self.tab.setCurrentWidget(docview)
         self.ChangeButton.setDisabled(False)
         self.acCloseFile.setDisabled(False)
         self.acChange.setDisabled(False)
-        self.MainWinMainLayout.removeWidget(self.newdocview)
-        self.newdocview.deleteLater()
-        del self.doclist[0]
-        self.MainWinMainLayout.insertWidget(0, DocumentView(self.doclist[0]))
 
 
     def Change(self):
-        output_filename = os.path.splitext(self.doclist[0].filename)[0] + ".pdf"
+        output_filename = os.path.splitext(self.tab.currentWidget().filename)[0] + ".pdf"
         tool = self.ConfirmedSetting["Change__ChangeTool"]
-        HTML_text = self.doclist[0].HTML_text
+        HTML_text = self.tab.currentWidget().HTML_text
 
         if os.path.isfile(output_filename):
             reply = QMessageBox.question(self, self.tr("上書き確認"), self.tr("pdfファイルは既に存在しています。\n上書きしますか？"), QMessageBox.Yes | QMessageBox.No)
@@ -165,8 +170,11 @@ class MainWindow(QMainWindow):
         self.Refresh()
 
 
-    def file_close(self):
-        pass
+    def file_close(self, index = -1):
+        if index+1 :
+            self.tab.removeTab(index)
+        else:
+            self.tab.removeTab(self.tab.currentIndex())
 
 
     #many times uses --do not use MainDisplaySomethings--
