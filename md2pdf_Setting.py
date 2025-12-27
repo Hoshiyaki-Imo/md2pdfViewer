@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import *
 class SettingDialog(QDialog):
-    def __init__(self,mainwin):
+    def __init__(self, mainwin):
         super().__init__()
         self.mainwin = mainwin
 
@@ -52,7 +52,7 @@ class Setting_Change(QWidget):
         self.setLayout(self.SCLayout)
 
         ChangeTool = QComboBox()
-        ChangeTool.addItems(["weasyprint","xhtml2pdf"])
+        ChangeTool.addItems(["weasyprint","xhtml2pdf", "ChromiumPrint"])
         ChangeTool.setCurrentText(self.mainwin.ConfirmedSetting["Change__ChangeTool"])
         ChangeTool.currentIndexChanged.connect(lambda _ : (self.mainwin.BeingEditedList.update(Change__ChangeTool = ChangeTool.currentText())))
         ChangeCompletedDialog = QCheckBox(self.tr("表示する"))

@@ -2,7 +2,8 @@ import PySide6
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 from PySide6.QtCore import *
-from PySide6.QtWebEngineWidgets import QWebEngineView
+from PySide6.QtWebEngineWidgets import *
+from PySide6.QtWebEngineCore import *
 import os
 import sys
 import markdown
@@ -125,9 +126,12 @@ class MainWindow(QMainWindow):
         self.wait = InformationDialog(self.tr("変換中"), self.tr("変換中です"))
         self.wait.OffCloseButton()
         self.wait.setModal(True)
-        self.changeWorker = Worker_Change(self.ConfirmedSetting["Change__ChangeTool"], self.HTML_text, output_filename)
-        self.changeWorker.finished.connect(self.ChangedDialog)
-        self.changeWorker.start()
+        if self.ConfirmedSetting["Change__ChangeTool"] == "ChromiumPrint":
+            self.PrintChromium(output_filename)
+        else:
+            self.changeWorker = Worker_Change(self.ConfirmedSetting["Change__ChangeTool"], self.HTML_text, output_filename)
+            self.changeWorker.finished.connect(self.ChangedDialog)
+            self.changeWorker.start()
         self.wait.show()
 
 
@@ -195,6 +199,20 @@ class MainWindow(QMainWindow):
         elif not Changed:
             QMessageBox.warning(self, self.tr("エラー"), self.tr("変換時にエラーが発生しました"))
 
+    def PrintChromium(self, output_filename):
+        self.page = QWebEnginePage(self)
+        def on_load(ok):
+            if not ok:
+                self.page.deleteLater()
+                self.ChangedDialog(False)
+                return
+            self.page.printToPdf(output_filename)
+        def pdf_finished():
+            self.page.deleteLater()
+            self.ChangedDialog(True)
+        self.page.loadFinished.connect(on_load)
+        self.page.pdfPrintingFinished.connect(pdf_finished)
+        self.page.setHtml(self.HTML_text)
 
 
 class InformationDialog(QDialog):
