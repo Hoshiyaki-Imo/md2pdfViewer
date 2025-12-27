@@ -300,26 +300,52 @@ class Document(QObject):
             else:
                 self.encoding = result
             with open(self.filename,"r", encoding = self.encoding, errors = "replace") as f:
-                convert_text = f.read()
+                raw_text = f.read()
             extension = os.path.splitext(self.filename)[1]
             if extension == ".md":
                 md = markdown.Markdown()
-                self.HTML_text = md.convert(convert_text)
+                self.HTML_text = md.convert(raw_text)
+                self.md_text = raw_text
             elif extension == ".html" or extension == ".htm":
-                self.HTML_text = convert_text
+                import html2markdown
+                self.HTML_text = raw_text
+                self.md_text = html2markdown.convert(raw_text)
         else:
             self.HTML_text = ""
+            self.md_text = ""
             self.filename = self.tr("新しいファイル.md")
 
 
 class DocumentView(QWidget):
     def __init__(self, doc : Document):
         super().__init__()
+        self.Splitter = QSplitter()
         self.Preview = QWebEngineView()
         self.Preview.setHtml(doc.HTML_text)
+        self.Editor = ZoomablePlainTextEdit()
+        self.Editor.setPlainText(doc.md_text)
+        self.Splitter.addWidget(self.Editor)
+        self.Splitter.addWidget(self.Preview)
+        splitter_width = self.Splitter.size().width()
+        self.Splitter.setSizes([splitter_width * 0.5, splitter_width * 0.5])
         self.layout = QHBoxLayout()
-        self.layout.addWidget(self.Preview)
+        self.layout.addWidget(self.Splitter)
         self.setLayout(self.layout)
+
+class ZoomablePlainTextEdit(QPlainTextEdit):
+    def __init__(self):
+        super().__init__()
+        self.zoom_factor = 1.0  # 現在の倍率
+
+    def wheelEvent(self, event):
+        if event.modifiers() == Qt.ControlModifier:
+            delta = event.angleDelta().y()
+            if delta > 0:
+                self.zoomIn(1) 
+            else:
+                self.zoomOut(1) 
+        else:
+            super().wheelEvent(event)
 
 
 
