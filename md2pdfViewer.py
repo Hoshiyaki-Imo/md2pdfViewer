@@ -96,47 +96,48 @@ class MainWindow(QMainWindow):
 
     def file_choose(self):
         try:
-            self.filename, tmp = QFileDialog.getOpenFileName(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
+            self.nowFilename, tmp = QFileDialog.getOpenFileName(self,self.tr("ファイルを開く"),"","Text File (*.html *.htm *.md)")
         except FileNotFoundError:
             self.StatusBar.showMessage(self.tr("ファイルが選択されませんでした"))
             return
-        self.StatusBar.showMessage(self.tr("ファイルを開きました : " + str(self.filename)))
-        with open (self.filename,mode = "rb") as f:
+        self.StatusBar.showMessage(self.tr("ファイルを開きました : " + str(self.nowFilename)))
+        with open (self.nowFilename,mode = "rb") as f:
             tmp = f.read()
             result = chardet.detect(tmp)["encoding"]
-        if QCborStringResultByteArray == "SHIFT_JIS":
+        if result == "SHIFT_JIS":
             self.encoding = "CP932"
         elif result == None:
             self.encoding = "utf-8"
         else:
             self.encoding = result
-        with open(self.filename,"r", encoding = self.encoding, errors = "replace") as f:
+        with open(self.nowFilename,"r", encoding = self.encoding, errors = "replace") as f:
             convert_text = f.read()
-        extension = os.path.splitext(self.filename)[1]
+        extension = os.path.splitext(self.nowFilename)[1]
         if extension == ".md":
             md = markdown.Markdown()
-            self.HTML_text = md.convert(convert_text)
+            self.nowHTML_text = md.convert(convert_text)
         elif extension == ".html" or extension == ".htm":
-            self.HTML_text = convert_text
-        self.Preview.setHtml(self.HTML_text)
+            self.nowHTML_text = convert_text
+        self.Preview.setHtml(self.nowHTML_text)
         self.ChangeOK()
 
 
     def Change(self):
-        output_filename = os.path.splitext(self.filename)[0] + ".pdf"
+        output_filename = os.path.splitext(self.nowFilename)[0] + ".pdf"
+        tool = self.ConfirmedSetting["Change__ChangeTool"]
+        HTML_text = self.nowHTML_text
+
         if os.path.isfile(output_filename):
-            if not QMessageBox.question(self, self.tr("上書き確認"), self.tr("pdfファイルは既に存在しています。\n上書きしますか？")):
+            reply = QMessageBox.question(self, self.tr("上書き確認"), self.tr("pdfファイルは既に存在しています。\n上書きしますか？"), QMessageBox.Yes | QMessageBox.No)
+            if reply != QMessageBox.Yes:
                 return
         self.wait = InformationDialog(self.tr("変換中"), self.tr("変換中です"))
         self.wait.OffCloseButton()
         self.wait.setModal(True)
-        if self.ConfirmedSetting["Change__ChangeTool"] == "ChromiumPrint":
-            self.PrintChromium(output_filename)
-        else:
-            self.changeWorker = Worker_Change(self.ConfirmedSetting["Change__ChangeTool"], self.HTML_text, output_filename)
-            self.changeWorker.finished.connect(self.ChangedDialog)
-            self.changeWorker.start()
         self.wait.show()
+        self.conv = PdfConverter()
+        self.conv.changed.connect(self.ChangedDialog)
+        self.conv.convert(output_filename, tool, HTML_text)
 
 
     def SettingDialog(self):
@@ -194,9 +195,9 @@ class MainWindow(QMainWindow):
             self.StatusBar.setVisible(False)
             self.acDisplayStatusBar.setChecked(False)
         '''if self.ConfirmedSetting["Change__OriginalFont"]:
-            if "<head>" in self.HTML_text:
+            if "<head>" in self.nowHTML_text:
                 css = self.ConfirmedSetting["Change__FontFamilyName"]
-                self.HTML_text = self.HTML_text.replace("<head>", f"<head><style>{css}</style>")'''
+                self.nowHTML_text = self.nowHTML_text.replace("<head>", f"<head><style>{css}</style>")'''
 
 
     def showIcon(self):
@@ -213,20 +214,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, self.tr("エラー"), self.tr("変換時にエラーが発生しました"))
 
 
-    def PrintChromium(self, output_filename):
-        self.page = QWebEnginePage(self)
-        def on_load(ok):
-            if not ok:
-                self.page.deleteLater()
-                self.ChangedDialog(False)
-                return
-            self.page.printToPdf(output_filename)
-        def pdf_finished():
-            self.page.deleteLater()
-            self.ChangedDialog(True)
-        self.page.loadFinished.connect(on_load)
-        self.page.pdfPrintingFinished.connect(pdf_finished)
-        self.page.setHtml(self.HTML_text)
+
 
 
 class InformationDialog(QDialog):
@@ -250,13 +238,43 @@ class InformationDialog(QDialog):
 
 
 
+class PdfConverter(QObject):
+    changed = Signal(bool)
+    def convert(self, output_filename, tool, HTML_text):
+        if tool == "ChromiumPrint":
+            self.PrintChromium(HTML_text, output_filename)
+        else:
+            self.changeWorker = Worker_Change(tool, HTML_text, output_filename)
+            self.changeWorker.finished.connect(self.Changed)
+            self.changeWorker.start()
+
+    def Changed(self, successChange):
+        self.changed.emit(successChange)
+
+    def PrintChromium(self, HTML_text, output_filename):
+        self.page = QWebEnginePage(self)
+        def on_load(ok):
+            if not ok:
+                self.page.deleteLater()
+                self.Changed(False)
+                return
+            self.page.printToPdf(output_filename)
+        def pdf_finished(path, ok):
+            self.page.deleteLater()
+            self.Changed(ok)
+        self.page.loadFinished.connect(on_load)
+        self.page.pdfPrintingFinished.connect(pdf_finished)
+        self.page.setHtml(HTML_text)
+
+
+
 class Worker_Change(QThread):
     finished = Signal(bool)
 
     def __init__(self, tool, HTML_text, output_filename):
         super().__init__()
         self.tool = tool
-        self.HTML_text = HTML_text
+        self.nowHTML_text = HTML_text
         self.output_filename = output_filename
 
 
@@ -264,11 +282,11 @@ class Worker_Change(QThread):
         try:
             if(self.tool == "weasyprint"):
                 from weasyprint import HTML
-                HTML(string = self.HTML_text).write_pdf(self.output_filename)
+                HTML(string = self.nowHTML_text).write_pdf(self.output_filename)
             elif(self.tool == "xhtml2pdf"):
                 from xhtml2pdf import pisa
                 with open(self.output_filename, "w+b") as file:
-                    pisa_status = pisa.CreatePDF(src=self.HTML_text, dest=file)
+                    pisa_status = pisa.CreatePDF(src=self.nowHTML_text, dest=file)
             self.finished.emit(True)
         except:
             self.finished.emit(False)
