@@ -1,12 +1,49 @@
 import PySide6
-from PySide6.QtWidgets import QMainWindow, QTabWidget, QPushButton, QFileDialog, QMessageBox, QVBoxLayout, QWidget, QDialog, QLabel, QApplication
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QPushButton, QFileDialog, QMessageBox, QVBoxLayout, QWidget, QDialog, QLabel, QApplication, QProgressBar
 from PySide6.QtGui import QIcon, QPixmap, QAction
-from PySide6.QtCore import Qt, QSettings
+from PySide6.QtCore import Qt, QSettings, QEventLoop
 import os
 import sys
 import md2pdf_class_Document as Doc
 import md2pdf_class_DocumentView as Docv
 import md2pdf_class_PdfConverter as Pdfconv
+
+
+
+class InformationDialog(QDialog):
+    def __init__(self, wintitle = "Title", wincontent = "Content", width = 200, height = 100):
+        super().__init__()
+        self.setWindowTitle(wintitle)
+        self.resize(width,height)
+        self.layout = QVBoxLayout()
+        self.layout.addWidget(QLabel(wincontent))
+        self.setLayout(self.layout)
+
+
+    def OffCloseButton(self):
+        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
+
+
+    def AddIcon(self, Icon):
+        iconlabel = QLabel()
+        iconlabel.setPixmap(Icon)
+        self.layout.addWidget(iconlabel)
+
+    def AddProgressBar(self, visable = False, min = 0, max = 100):
+        self.progress = QProgressBar()
+        self.progress.setTextVisible(visable)
+        self.progress.setMinimum(min)
+        self.progress.setMaximum(max)
+        self.progress.setValue(0)
+        self.layout.insertWidget(0, self.progress)
+
+    def setProgressBarInt(self, num):
+        self.progress.setValue(num)
+
+    def ProgressBarInt(self):
+        return self.progress.value()
+
+
 
 # PySide6のアプリ本体（ユーザがコーディングしていく部分）
 class MainWindow(QMainWindow):
@@ -16,8 +53,9 @@ class MainWindow(QMainWindow):
         self.settings = QSettings("HoshiYakiImo", "md2pdfViewer")
         self.loadSetting(self.settings)
 
-        self.MAKEWINDOW()
-        self.restart()
+        self.Makewindow()
+        #start
+        self.acCloseFile.setDisabled(True)
 
 
     def loadSetting(self,settings):
@@ -26,12 +64,9 @@ class MainWindow(QMainWindow):
                            "Change__ChangeCompletedDialog" : settings.value("Change/ChangeCompletedDialog", True, type = bool),
                            "Display__ChangeButton" : settings.value("Display/ChangeButton", True, type = bool),
                            "Display__TabCloseButton" : settings.value("Display/TabCloseButton", False, type = bool)}
-        self.BeingEditedList = {}
-        for key, value in self.ConfirmedSetting.items():
-                self.BeingEditedList[key.replace("/","__")] = value
 
 
-    def MAKEWINDOW(self):
+    def Makewindow(self):
         self.setWindowTitle(self.tr("md2pdfViewer"))
         self.resize(800,600)
         self.makeMenuBar()
@@ -39,7 +74,6 @@ class MainWindow(QMainWindow):
 
         self.tab = QTabWidget()
         self.tab.setMovable(True)
-        self.tab.setTabsClosable(True)
         self.tab.tabCloseRequested.connect(self.file_close)
         self.newdocview = Docv.DocumentView(Doc.Document(None))
         self.tab.addTab(self.newdocview, "NewFile")
@@ -50,13 +84,10 @@ class MainWindow(QMainWindow):
         self.StatusBar = self.statusBar()
         self.setStatusBar(self.StatusBar)
 
-        self.MainDisplaySomethings()
-
-
-    def restart(self):
-        self.ChangeButton.setDisabled(True)
-        self.acChange.setDisabled(True)
-        self.acCloseFile.setDisabled(True)
+        self.ChangeButton = QPushButton(self.tr("このファイルを変換"))
+        self.ChangeButton.clicked.connect(self.Change)
+        self.MainWinMainLayout.addWidget(self.ChangeButton)
+        self.Refresh()
 
 
     def makeMenuBar(self):
@@ -69,8 +100,10 @@ class MainWindow(QMainWindow):
 
         acOpenFile = QAction(self.tr("ファイルを開く"), self)
         acOpenFile.triggered.connect(self.file_choose)
-        self.acChange = QAction(self.tr("現在のファイルを変換"), self)
+        self.acChange = QAction(self.tr("現在のファイル"), self)
         self.acChange.triggered.connect(self.Change)
+        self.acChangeAll = QAction(self.tr("すべてのファイル"), self)
+        self.acChangeAll.triggered.connect(self.ChangeAll)
         self.acCloseFile = QAction(self.tr("ファイルを閉じる"), self)
         self.acCloseFile.triggered.connect(self.file_close)
         self.acCloseApp = QAction(self.tr("ソフトを終了"), self)
@@ -90,7 +123,10 @@ class MainWindow(QMainWindow):
 
         #メニューバーにアクションを追加
         mFile.addAction(acOpenFile)
-        mFile.addAction(self.acChange)
+        self.mmChange = mFile.addMenu(self.tr("変換"))
+        self.mmChange.addAction(self.acChange)
+        self.mmChange.addAction(self.acChangeAll)
+        mFile.addSeparator()
         mFile.addAction(self.acCloseFile)
         mFile.addAction(self.acCloseApp)
         mEdit.addAction(acSetting)
@@ -116,24 +152,71 @@ class MainWindow(QMainWindow):
         self.ChangeButton.setDisabled(False)
         self.acCloseFile.setDisabled(False)
         self.acChange.setDisabled(False)
+        self.acChangeAll.setDisabled(False)
+        self.mmChange.setDisabled(False)
 
 
-    def Change(self):
-        output_filename = os.path.splitext(self.tab.currentWidget().viewdoc.filename)[0] + ".pdf"
+    def Change(self, _, i = -1):
         tool = self.ConfirmedSetting["Change__ChangeTool"]
-        HTML_text = self.tab.currentWidget().viewdoc.HTML_text
+        index = i if i + 1 else self.tab.currentIndex()
+        if i + 1:
+            output_filename = os.path.splitext(self.tab.widget(i).viewdoc.filename)[0] + ".pdf"
+            changeok = True if self.tab.count() == i + 1 else False
+            if not i:
+                self.Change_num = 0
+                self.quelist = []
+        else:
+            output_filename = os.path.splitext(self.tab.currentWidget().viewdoc.filename)[0] + ".pdf"
+            changeok = True
+            self.quelist = []
+            self.Change_num = 0
 
         if os.path.isfile(output_filename):
-            reply = QMessageBox.question(self, self.tr("上書き確認"), self.tr("pdfファイルは既に存在しています。\n上書きしますか？"), QMessageBox.Yes | QMessageBox.No)
+            reply = QMessageBox.question(self, self.tr("上書き確認"), self.tr(output_filename + "は既に存在しています。\n上書きしますか？"), QMessageBox.Yes | QMessageBox.No)
             if reply != QMessageBox.Yes:
-                return
-        self.wait = InformationDialog(self.tr("変換中"), self.tr("変換中です"))
-        self.wait.OffCloseButton()
-        self.wait.setModal(True)
-        self.wait.show()
-        self.conv = Pdfconv.PdfConverter()
-        self.conv.changed.connect(self.ChangedDialog)
-        self.conv.convert(output_filename, tool, HTML_text)
+                self.quelist.append([index, False, output_filename])
+                self.Change_num += 1
+            else:
+                self.quelist.append([index, True, output_filename])
+        else:
+            self.quelist.append([index, True, output_filename])
+        if changeok:
+            self.wait = InformationDialog(self.tr("変換中"), self.tr("変換中です"))
+            self.wait.AddProgressBar(True, 0, self.Change_num)
+            self.wait.OffCloseButton()
+            self.wait.setModal(True)
+            self.wait.show()
+            i = 0
+            self.finishedfilenum = 0
+            self.conv = Pdfconv.PdfConverter()
+            self.conv.changed.connect(self.ChangedDialog)
+            self.loop = QEventLoop()
+            for n in self.quelist:
+                i += 1
+                if not n[1]:
+                    continue
+                self.conv.convert(n[2], tool, self.tab.widget(n[0]).viewdoc.HTML_text)
+                self.loop.exec()
+
+
+    def ChangedDialog(self, Changed):
+        self.finishedfilenum += 1
+        if Changed and self.ConfirmedSetting["Change__ChangeCompletedDialog"]:
+            if self.finishedfilenum == len(self.quelist):
+                self.wait.accept()
+                QMessageBox.information(self, self.tr("変換成功"), self.tr("ファイルの変換に成功しました"))
+            else:
+                print("continue")
+                self.wait.setProgressBarInt(self.wait.ProgressBarInt() + 1)
+            self.loop.quit()
+        elif not Changed:
+            self.wait.accept()
+            QMessageBox.warning(self, self.tr("エラー"), self.tr("変換時にエラーが発生しました"))
+
+
+    def ChangeAll(self):
+        for i in range(self.tab.count()):
+            self.Change(None, i)
 
 
     def SettingDialog(self):
@@ -149,23 +232,14 @@ class MainWindow(QMainWindow):
 
 
     def DisplayChangeStatusBar(self):
-        self.BeingEditedList["Main__DisplayStatusBar"] = False if self.ConfirmedSetting["Main__DisplayStatusBar"] else True
-        self.ChangeSetting()
+        self.ConfirmedSetting["Main__DisplayStatusBar"] = False if self.ConfirmedSetting["Main__DisplayStatusBar"] else True
+        self.settings.setValue("Main/DisplayStatusBar", False if self.ConfirmedSetting["Main__DisplayStatusBar"] else True)
+        self.Refresh()
 
 
-    #First once
-    def MainDisplaySomethings(self):
-        self.ChangeButton = QPushButton(self.tr("このファイルを変換"))
-        self.ChangeButton.clicked.connect(self.Change)
-        self.MainWinMainLayout.addWidget(self.ChangeButton)
-        self.ChangeButton.setVisible(True if self.ConfirmedSetting["Display__ChangeButton"] else False)
-        self.StatusBar.setVisible(True if self.ConfirmedSetting["Main__DisplayStatusBar"] else False)
-        self.acDisplayStatusBar.setChecked(True if self.ConfirmedSetting["Main__DisplayStatusBar"] else False)
-
-
-    def ChangeSetting(self):
-        for key, value in self.BeingEditedList.items():
-                self.settings.setValue(key.replace("__","/"),str(value))
+    def ChangeSetting(self, BeingEditedList):
+        for key, value in BeingEditedList.items():
+                self.settings.setValue(key.replace("__","/"), str(value))
                 self.ConfirmedSetting[key] = value
         self.Refresh()
 
@@ -175,11 +249,18 @@ class MainWindow(QMainWindow):
             self.tab.removeTab(index)
         else:
             self.tab.removeTab(self.tab.currentIndex())
+        if self.tab.count() == 0:
+            self.ChangeButton.setDisabled(True)
+            self.acChange.setDisabled(True)
+            self.acCloseFile.setDisabled(True)
+            self.acChangeAll.setDisabled(True)
+            self.mmChange.setDisabled(True)
 
 
     #many times uses --do not use MainDisplaySomethings--
     def Refresh(self):
         self.ChangeButton.setVisible(True if self.ConfirmedSetting["Display__ChangeButton"] else False)
+        self.tab.setTabsClosable(True if self.ConfirmedSetting["Display__TabCloseButton"] else False)
         if self.ConfirmedSetting["Main__DisplayStatusBar"]:
             self.StatusBar.setVisible(True)
             self.acDisplayStatusBar.setChecked(True)
@@ -196,43 +277,6 @@ class MainWindow(QMainWindow):
         dia = InformationDialog(self.tr("アイコン"), self.tr("md2pdfViewerのアイコン"), 300, 100)
         dia.AddIcon(QPixmap("icon.ico").scaled(512, 512, Qt.IgnoreAspectRatio, Qt.FastTransformation))
         dia.exec()
-
-
-    def ChangedDialog(self, Changed):
-        self.wait.accept()
-        if Changed and self.ConfirmedSetting["Change__ChangeCompletedDialog"]:
-            QMessageBox.information(self, self.tr("変換成功"), self.tr("ファイルの変換に成功しました"))
-        elif not Changed:
-            QMessageBox.warning(self, self.tr("エラー"), self.tr("変換時にエラーが発生しました"))
-
-
-
-
-
-class InformationDialog(QDialog):
-    def __init__(self, wintitle = "Title", wincontent = "Content", width = 200, height = 100):
-        super().__init__()
-        self.setWindowTitle(wintitle)
-        self.resize(width,height)
-        self.layout = QVBoxLayout()
-        self.layout.addWidget(QLabel(wincontent))
-        self.setLayout(self.layout)
-
-
-    def OffCloseButton(self):
-        self.setWindowFlag(Qt.WindowCloseButtonHint, False)
-
-
-    def AddIcon(self, Icon):
-        iconlabel = QLabel()
-        iconlabel.setPixmap(Icon)
-        self.layout.addWidget(iconlabel)
-
-
-
-
-
-
 
 
 

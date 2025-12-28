@@ -3,6 +3,9 @@ class SettingDialog(QDialog):
     def __init__(self, mainwin):
         super().__init__()
         self.mainwin = mainwin
+        self.BeingEditedList = {}
+        for key, value in self.mainwin.ConfirmedSetting.items():
+                self.BeingEditedList[key.replace("/","__")] = value
 
         self.setWindowTitle(self.tr("設定"))
         mainlayout = QVBoxLayout()
@@ -13,8 +16,8 @@ class SettingDialog(QDialog):
         self.stab.setSizePolicy(QSizePolicy.Maximum, QSizePolicy.Preferred)
         self.stab.setFixedWidth(80)
         self.sdetail = QStackedWidget()
-        self.sdetail.addWidget(self.wrap_scroll(Setting_Change(self.mainwin)))
-        self.sdetail.addWidget(self.wrap_scroll(Setting_Display(self.mainwin)))
+        self.sdetail.addWidget(self.wrap_scroll(Setting_Change(self.mainwin, self)))
+        self.sdetail.addWidget(self.wrap_scroll(Setting_Display(self.mainwin, self)))
 
         self.save_button = QPushButton(self.tr("設定を反映"))
         self.save_button.clicked.connect(self.SaveSetting)
@@ -37,28 +40,29 @@ class SettingDialog(QDialog):
 
 
     def SaveSetting(self):
-        if self.mainwin.BeingEditedList == self.mainwin.ConfirmedSetting:
+        if self.BeingEditedList == self.mainwin.ConfirmedSetting:
             QMessageBox.information(self,self.tr("一応通知"), self.tr("設定は変更されていません"))
         else:
-            self.mainwin.ChangeSetting()
+            self.mainwin.ChangeSetting(self.BeingEditedList)
             self.mainwin.StatusBar.showMessage(self.tr("設定が変更されました"))
 
 
 
 class Setting_Change(QWidget):
-    def __init__(self, mainwin):
+    def __init__(self, mainwin, settingdialog):
         super().__init__()
         self.mainwin = mainwin
+        self.settingdialog = settingdialog
         self.SCLayout = QFormLayout()
         self.setLayout(self.SCLayout)
 
         ChangeTool = QComboBox()
-        ChangeTool.addItems(["weasyprint", "xhtml2pdf", "ChromiumPrint"])
+        ChangeTool.addItems(["ChromiumPrint", "weasyprint", "xhtml2pdf"])
         ChangeTool.setCurrentText(self.mainwin.ConfirmedSetting["Change__ChangeTool"])
-        ChangeTool.currentIndexChanged.connect(lambda _ : (self.mainwin.BeingEditedList.update(Change__ChangeTool = ChangeTool.currentText())))
+        ChangeTool.currentIndexChanged.connect(lambda _ : (self.settingdialog.BeingEditedList.update(Change__ChangeTool = ChangeTool.currentText())))
         ChangeCompletedDialog = QCheckBox(self.tr("表示する"))
         ChangeCompletedDialog.setChecked(self.mainwin.ConfirmedSetting["Change__ChangeCompletedDialog"])
-        ChangeCompletedDialog.stateChanged.connect(lambda _ : (self.mainwin.BeingEditedList.update(Change__ChangeCompletedDialog = ChangeCompletedDialog.isChecked())))
+        ChangeCompletedDialog.stateChanged.connect(lambda _ : (self.settingdialog.BeingEditedList.update(Change__ChangeCompletedDialog = ChangeCompletedDialog.isChecked())))
 
         self.SCLayout.addRow(self.tr("変換ツール"), ChangeTool)
         self.SCLayout.addRow(self.tr("変換完了通知"), ChangeCompletedDialog)
@@ -66,13 +70,17 @@ class Setting_Change(QWidget):
 
 
 class Setting_Display(QWidget):
-    def __init__(self, mainwin):
+    def __init__(self, mainwin, settingdialog):
         super().__init__()
         self.mainwin = mainwin
+        self.settingdialog = settingdialog
         self.SDLayout = QFormLayout()
         self.setLayout(self.SDLayout)
         DisplayChangeButton = QCheckBox(self.tr("表示する"))
         DisplayChangeButton.setChecked(self.mainwin.ConfirmedSetting["Display__ChangeButton"])
-        DisplayChangeButton.stateChanged.connect(lambda _ : (self.mainwin.BeingEditedList.update(Display__ChangeButton = DisplayChangeButton.isChecked())))
+        DisplayChangeButton.stateChanged.connect(lambda _ : (self.settingdialog.BeingEditedList.update(Display__ChangeButton = DisplayChangeButton.isChecked())))
+        DisplayTabCloseButton = QCheckBox(self.tr("表示する"))
+        DisplayTabCloseButton.stateChanged.connect(lambda _ : (self.settingdialog.BeingEditedList.update(Display__TabCloseButton = DisplayTabCloseButton.isChecked())))
 
         self.SDLayout.addRow(self.tr("変換ボタン"), DisplayChangeButton)
+        self.SDLayout.addRow(self.tr("タブを閉じるボタン"), DisplayTabCloseButton)
