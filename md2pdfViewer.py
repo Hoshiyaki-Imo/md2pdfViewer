@@ -1,13 +1,12 @@
 import PySide6
-from PySide6.QtWidgets import *
-from PySide6.QtGui import *
-from PySide6.QtCore import *
-from PySide6.QtWebEngineWidgets import *
-from PySide6.QtWebEngineCore import *
+from PySide6.QtWidgets import QMainWindow, QTabWidget, QPushButton, QFileDialog, QMessageBox, QVBoxLayout, QWidget, QDialog, QLabel, QApplication
+from PySide6.QtGui import QIcon, QPixmap, QAction
+from PySide6.QtCore import Qt, QSettings
 import os
 import sys
-import markdown
-import chardet
+import md2pdf_class_Document as Doc
+import md2pdf_class_DocumentView as Docv
+import md2pdf_class_PdfConverter as Pdfconv
 
 # PySide6のアプリ本体（ユーザがコーディングしていく部分）
 class MainWindow(QMainWindow):
@@ -42,7 +41,7 @@ class MainWindow(QMainWindow):
         self.tab.setMovable(True)
         self.tab.setTabsClosable(True)
         self.tab.tabCloseRequested.connect(self.file_close)
-        self.newdocview = DocumentView(Document(None))
+        self.newdocview = Docv.DocumentView(Doc.Document(None))
         self.tab.addTab(self.newdocview, "NewFile")
         self.MainWinMainLayout.addWidget(self.tab)
         centralWidget = QWidget()
@@ -110,8 +109,8 @@ class MainWindow(QMainWindow):
             return
         self.StatusBar.showMessage(self.tr("ファイルを開きました"))
         for iFilename in Filenames:
-            doc = Document(iFilename)
-            docview = DocumentView(doc)
+            doc = Doc.Document(iFilename)
+            docview = Docv.DocumentView(doc)
             self.tab.addTab(docview, os.path.basename(doc.filename))
             self.tab.setCurrentWidget(docview)
         self.ChangeButton.setDisabled(False)
@@ -120,9 +119,9 @@ class MainWindow(QMainWindow):
 
 
     def Change(self):
-        output_filename = os.path.splitext(self.tab.currentWidget().filename)[0] + ".pdf"
+        output_filename = os.path.splitext(self.tab.currentWidget().viewdoc.filename)[0] + ".pdf"
         tool = self.ConfirmedSetting["Change__ChangeTool"]
-        HTML_text = self.tab.currentWidget().HTML_text
+        HTML_text = self.tab.currentWidget().viewdoc.HTML_text
 
         if os.path.isfile(output_filename):
             reply = QMessageBox.question(self, self.tr("上書き確認"), self.tr("pdfファイルは既に存在しています。\n上書きしますか？"), QMessageBox.Yes | QMessageBox.No)
@@ -132,13 +131,13 @@ class MainWindow(QMainWindow):
         self.wait.OffCloseButton()
         self.wait.setModal(True)
         self.wait.show()
-        self.conv = PdfConverter()
+        self.conv = Pdfconv.PdfConverter()
         self.conv.changed.connect(self.ChangedDialog)
         self.conv.convert(output_filename, tool, HTML_text)
 
 
     def SettingDialog(self):
-        import md2pdf_Setting as s
+        import md2pdf_class_SettingDialog as s
         sd = s.SettingDialog(self)
         sd.exec()
 
@@ -231,121 +230,9 @@ class InformationDialog(QDialog):
 
 
 
-class PdfConverter(QObject):
-    changed = Signal(bool)
-    def convert(self, output_filename, tool, HTML_text):
-        if tool == "ChromiumPrint":
-            self.PrintChromium(HTML_text, output_filename)
-        else:
-            self.changeWorker = Worker_Change(tool, HTML_text, output_filename)
-            self.changeWorker.finished.connect(self.Changed)
-            self.changeWorker.start()
-
-    def Changed(self, successChange):
-        self.changed.emit(successChange)
-
-    def PrintChromium(self, HTML_text, output_filename):
-        self.page = QWebEnginePage(self)
-        def on_load(ok):
-            if not ok:
-                self.page.deleteLater()
-                self.Changed(False)
-                return
-            self.page.printToPdf(output_filename)
-        def pdf_finished(path, ok):
-            self.page.deleteLater()
-            self.Changed(ok)
-        self.page.loadFinished.connect(on_load)
-        self.page.pdfPrintingFinished.connect(pdf_finished)
-        self.page.setHtml(HTML_text)
 
 
 
-class Worker_Change(QThread):
-    finished = Signal(bool)
-
-    def __init__(self, tool, HTML_text, output_filename):
-        super().__init__()
-        self.tool = tool
-        self.HTML_text = HTML_text
-        self.output_filename = output_filename
-
-
-    def run(self):
-        try:
-            if(self.tool == "weasyprint"):
-                from weasyprint import HTML
-                HTML(string = self.HTML_text).write_pdf(self.output_filename)
-            elif(self.tool == "xhtml2pdf"):
-                from xhtml2pdf import pisa
-                with open(self.output_filename, "w+b") as file:
-                    pisa_status = pisa.CreatePDF(src=self.HTML_text, dest=file)
-            self.finished.emit(True)
-        except:
-            self.finished.emit(False)
-
-
-
-class Document(QObject):
-    def __init__(self, filename = None):
-        if not filename == None:
-            self.filename = filename
-            with open (self.filename,mode = "rb") as f:
-                tmp = f.read()
-                result = chardet.detect(tmp)["encoding"]
-            if result == "SHIFT_JIS":
-                self.encoding = "CP932"
-            elif result == None:
-                self.encoding = "utf-8"
-            else:
-                self.encoding = result
-            with open(self.filename,"r", encoding = self.encoding, errors = "replace") as f:
-                raw_text = f.read()
-            extension = os.path.splitext(self.filename)[1]
-            if extension == ".md":
-                md = markdown.Markdown()
-                self.HTML_text = md.convert(raw_text)
-                self.md_text = raw_text
-            elif extension == ".html" or extension == ".htm":
-                import html2markdown
-                self.HTML_text = raw_text
-                self.md_text = html2markdown.convert(raw_text)
-        else:
-            self.HTML_text = ""
-            self.md_text = ""
-            self.filename = self.tr("新しいファイル.md")
-
-
-class DocumentView(QWidget):
-    def __init__(self, doc : Document):
-        super().__init__()
-        self.Splitter = QSplitter()
-        self.Preview = QWebEngineView()
-        self.Preview.setHtml(doc.HTML_text)
-        self.Editor = ZoomablePlainTextEdit()
-        self.Editor.setPlainText(doc.md_text)
-        self.Splitter.addWidget(self.Editor)
-        self.Splitter.addWidget(self.Preview)
-        splitter_width = self.Splitter.size().width()
-        self.Splitter.setSizes([splitter_width * 0.5, splitter_width * 0.5])
-        self.layout = QHBoxLayout()
-        self.layout.addWidget(self.Splitter)
-        self.setLayout(self.layout)
-
-class ZoomablePlainTextEdit(QPlainTextEdit):
-    def __init__(self):
-        super().__init__()
-        self.zoom_factor = 1.0  # 現在の倍率
-
-    def wheelEvent(self, event):
-        if event.modifiers() == Qt.ControlModifier:
-            delta = event.angleDelta().y()
-            if delta > 0:
-                self.zoomIn(1) 
-            else:
-                self.zoomOut(1) 
-        else:
-            super().wheelEvent(event)
 
 
 
